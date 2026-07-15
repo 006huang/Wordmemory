@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { useWordStore } from '../store/wordStore';
 import { categories } from '../data/mockWords';
 import { BookOpen, CheckCircle, Clock, Target } from 'lucide-react';
