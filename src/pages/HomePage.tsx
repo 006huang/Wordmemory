@@ -3,8 +3,18 @@ import { ChevronLeft, ChevronRight, CheckCircle, XCircle, RotateCcw, Volume2 } f
 import { useWordStore } from '../store/wordStore';
 import { Word } from '../types';
 
+const speakWord = (word: string) => {
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(word);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.8;
+    window.speechSynthesis.speak(utterance);
+  }
+};
+
 export const HomePage = () => {
-  const { words, currentWordIndex, isLearning, startLearning, nextWord, prevWord, markWord, fetchWords } = useWordStore();
+  const { words, learningRecords, currentWordIndex, isLearning, startLearning, stopLearning, nextWord, prevWord, markWord, fetchWords, fetchLearningRecords } = useWordStore();
   const [showAnswer, setShowAnswer] = useState(false);
   const [sessionWords, setSessionWords] = useState<Word[]>([]);
   const [masteredCount, setMasteredCount] = useState(0);
@@ -12,7 +22,8 @@ export const HomePage = () => {
 
   useEffect(() => {
     fetchWords();
-  }, [fetchWords]);
+    fetchLearningRecords();
+  }, [fetchWords, fetchLearningRecords]);
 
   useEffect(() => {
     if (isLearning) {
@@ -22,6 +33,11 @@ export const HomePage = () => {
       setLearningCount(0);
     }
   }, [isLearning, words]);
+
+  const masteredWordIds = new Set(learningRecords.filter((r) => r.status === 'mastered').map((r) => r.wordId));
+  const learningWordIds = new Set(learningRecords.filter((r) => r.status === 'learning').map((r) => r.wordId));
+  const totalMastered = masteredWordIds.size;
+  const totalLearning = learningWordIds.size;
 
   const currentWord = sessionWords[currentWordIndex];
 
@@ -47,7 +63,11 @@ export const HomePage = () => {
     if (currentWord) {
       await markWord(currentWord.id, 'mastered');
       setMasteredCount((prev) => prev + 1);
-      handleNext();
+      if (currentWordIndex >= sessionWords.length - 1) {
+        setSessionWords([]);
+      } else {
+        handleNext();
+      }
     }
   };
 
@@ -55,14 +75,20 @@ export const HomePage = () => {
     if (currentWord) {
       await markWord(currentWord.id, 'learning');
       setLearningCount((prev) => prev + 1);
-      handleNext();
+      if (currentWordIndex >= sessionWords.length - 1) {
+        setSessionWords([]);
+      } else {
+        handleNext();
+      }
     }
   };
 
   const handleReset = () => {
+    stopLearning();
     setSessionWords([]);
     setMasteredCount(0);
     setLearningCount(0);
+    fetchLearningRecords();
   };
 
   if (!isLearning) {
@@ -79,11 +105,11 @@ export const HomePage = () => {
             <div className="text-gray-600">总词数</div>
           </div>
           <div className="card text-center">
-            <div className="text-4xl font-bold text-green-500 mb-2">0</div>
+            <div className="text-4xl font-bold text-green-500 mb-2">{totalMastered}</div>
             <div className="text-gray-600">已掌握</div>
           </div>
           <div className="card text-center">
-            <div className="text-4xl font-bold text-yellow-500 mb-2">0</div>
+            <div className="text-4xl font-bold text-yellow-500 mb-2">{totalLearning}</div>
             <div className="text-gray-600">学习中</div>
           </div>
         </div>
@@ -114,12 +140,12 @@ export const HomePage = () => {
           <h2 className="text-2xl font-bold text-gray-800 mb-2">学习完成！</h2>
           <div className="flex justify-center gap-8 mb-6">
             <div>
-              <div className="text-3xl font-bold text-green-500">{masteredCount}</div>
-              <div className="text-gray-600">已掌握</div>
+              <div className="text-3xl font-bold text-green-500">{totalMastered}</div>
+              <div className="text-gray-600">累计已掌握</div>
             </div>
             <div>
-              <div className="text-3xl font-bold text-yellow-500">{learningCount}</div>
-              <div className="text-gray-600">学习中</div>
+              <div className="text-3xl font-bold text-yellow-500">{totalLearning}</div>
+              <div className="text-gray-600">累计学习中</div>
             </div>
           </div>
           <div className="flex gap-4 justify-center">
@@ -165,7 +191,7 @@ export const HomePage = () => {
             <h2 className="text-4xl font-bold text-gray-800 mb-2">{currentWord.word}</h2>
             <div className="flex items-center gap-4">
               <span className="text-gray-500">{currentWord.phonetic}</span>
-              <button className="p-2 hover:bg-gray-100 rounded-lg">
+              <button className="p-2 hover:bg-gray-100 rounded-lg" onClick={() => speakWord(currentWord.word)}>
                 <Volume2 className="w-5 h-5 text-primary-500" />
               </button>
             </div>

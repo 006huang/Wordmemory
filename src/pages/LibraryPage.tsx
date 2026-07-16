@@ -4,6 +4,16 @@ import { useWordStore } from '../store/wordStore';
 import { Word } from '../types';
 import { categories } from '../data/mockWords';
 
+const speakWord = (word: string) => {
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(word);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.8;
+    window.speechSynthesis.speak(utterance);
+  }
+};
+
 export const LibraryPage = () => {
   const { words, fetchWords, addWord, deleteWord } = useWordStore();
   const [searchTerm, setSearchTerm] = useState('');
@@ -100,7 +110,7 @@ export const LibraryPage = () => {
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-gray-800">{word.word}</span>
-                      <button className="p-1 hover:bg-gray-100 rounded">
+                      <button className="p-1 hover:bg-gray-100 rounded" onClick={() => speakWord(word.word)}>
                         <Volume2 className="w-4 h-4 text-primary-500" />
                       </button>
                     </div>

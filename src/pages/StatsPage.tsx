@@ -5,16 +5,20 @@ import { categories } from '../data/mockWords';
 import { BookOpen, CheckCircle, Clock, Target } from 'lucide-react';
 
 export const StatsPage = () => {
-  const { words, learningRecords, fetchWords, fetchLearningRecords } = useWordStore();
+  const { words, learningRecords, dailyStats, fetchWords, fetchLearningRecords, fetchDailyStats, fetchWeeklyStats } = useWordStore();
 
   useEffect(() => {
     fetchWords();
     fetchLearningRecords();
-  }, [fetchWords, fetchLearningRecords]);
+    fetchDailyStats();
+    fetchWeeklyStats();
+  }, [fetchWords, fetchLearningRecords, fetchDailyStats, fetchWeeklyStats]);
 
-  const masteredCount = learningRecords.filter((r) => r.status === 'mastered').length;
-  const learningCount = learningRecords.filter((r) => r.status === 'learning').length;
-  const newCount = words.length - masteredCount - learningCount;
+  const masteredWordIds = new Set(learningRecords.filter((r) => r.status === 'mastered').map((r) => r.wordId));
+  const learningWordIds = new Set(learningRecords.filter((r) => r.status === 'learning').map((r) => r.wordId));
+  const masteredCount = masteredWordIds.size;
+  const learningCount = learningWordIds.size;
+  const newCount = Math.max(0, words.length - masteredCount - learningCount);
 
   const categoryStats = categories.map((cat) => ({
     name: cat.name,
@@ -29,15 +33,21 @@ export const StatsPage = () => {
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b'];
 
-  const weeklyData = [
-    { day: '周一', learned: 12, reviewed: 20 },
-    { day: '周二', learned: 8, reviewed: 15 },
-    { day: '周三', learned: 15, reviewed: 25 },
-    { day: '周四', learned: 10, reviewed: 18 },
-    { day: '周五', learned: 18, reviewed: 30 },
-    { day: '周六', learned: 20, reviewed: 35 },
-    { day: '周日', learned: 14, reviewed: 28 },
-  ];
+  const weeklyData = dailyStats.length > 0
+    ? dailyStats.map((stat) => ({
+        day: stat.date,
+        learned: stat.wordsLearned,
+        reviewed: stat.wordsReviewed,
+      }))
+    : [
+        { day: '周一', learned: 12, reviewed: 20 },
+        { day: '周二', learned: 8, reviewed: 15 },
+        { day: '周三', learned: 15, reviewed: 25 },
+        { day: '周四', learned: 10, reviewed: 18 },
+        { day: '周五', learned: 18, reviewed: 30 },
+        { day: '周六', learned: 20, reviewed: 35 },
+        { day: '周日', learned: 14, reviewed: 28 },
+      ];
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -151,36 +161,36 @@ export const StatsPage = () => {
           <div>
             <div className="flex justify-between mb-2">
               <span className="text-gray-700">总体进度</span>
-              <span className="text-gray-700 font-medium">{((masteredCount + learningCount) / words.length * 100).toFixed(0)}%</span>
+              <span className="text-gray-700 font-medium">{words.length > 0 ? Math.min(100, ((masteredCount + learningCount) / words.length * 100)).toFixed(0) : '0'}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3">
               <div
                 className="bg-primary-500 h-3 rounded-full transition-all duration-500"
-                style={{ width: `${((masteredCount + learningCount) / words.length * 100)}%` }}
+                style={{ width: `${words.length > 0 ? Math.min(100, ((masteredCount + learningCount) / words.length * 100)) : 0}%` }}
               />
             </div>
           </div>
           <div>
             <div className="flex justify-between mb-2">
               <span className="text-gray-700">已掌握</span>
-              <span className="text-green-600 font-medium">{(masteredCount / words.length * 100).toFixed(0)}%</span>
+              <span className="text-green-600 font-medium">{words.length > 0 ? Math.min(100, (masteredCount / words.length * 100)).toFixed(0) : '0'}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3">
               <div
                 className="bg-green-500 h-3 rounded-full transition-all duration-500"
-                style={{ width: `${(masteredCount / words.length * 100)}%` }}
+                style={{ width: `${words.length > 0 ? Math.min(100, (masteredCount / words.length * 100)) : 0}%` }}
               />
             </div>
           </div>
           <div>
             <div className="flex justify-between mb-2">
               <span className="text-gray-700">学习中</span>
-              <span className="text-yellow-600 font-medium">{(learningCount / words.length * 100).toFixed(0)}%</span>
+              <span className="text-yellow-600 font-medium">{words.length > 0 ? Math.min(100, (learningCount / words.length * 100)).toFixed(0) : '0'}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3">
               <div
                 className="bg-yellow-500 h-3 rounded-full transition-all duration-500"
-                style={{ width: `${(learningCount / words.length * 100)}%` }}
+                style={{ width: `${words.length > 0 ? Math.min(100, (learningCount / words.length * 100)) : 0}%` }}
               />
             </div>
           </div>

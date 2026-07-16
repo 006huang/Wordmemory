@@ -7,6 +7,7 @@ interface WordStore {
   words: Word[];
   learningRecords: LearningRecord[];
   dailyStats: DailyStats[];
+  weeklyStats: DailyStats[];
   currentWordIndex: number;
   isLearning: boolean;
   loading: boolean;
@@ -14,7 +15,9 @@ interface WordStore {
   fetchWords: () => Promise<void>;
   fetchLearningRecords: () => Promise<void>;
   fetchDailyStats: () => Promise<void>;
+  fetchWeeklyStats: () => Promise<void>;
   startLearning: () => void;
+  stopLearning: () => void;
   nextWord: () => void;
   prevWord: () => void;
   markWord: (wordId: string, status: 'learning' | 'mastered') => Promise<void>;
@@ -26,6 +29,7 @@ export const useWordStore = create<WordStore>((set, get) => ({
   words: [],
   learningRecords: [],
   dailyStats: [],
+  weeklyStats: [],
   currentWordIndex: 0,
   isLearning: false,
   loading: false,
@@ -66,8 +70,24 @@ export const useWordStore = create<WordStore>((set, get) => ({
     }
   },
 
+  fetchWeeklyStats: async () => {
+    set({ loading: true });
+    try {
+      const data = await api.getWeeklyStats();
+      set({ weeklyStats: data || [] });
+    } catch {
+      set({ weeklyStats: [] });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
   startLearning: () => {
     set({ isLearning: true, currentWordIndex: 0 });
+  },
+
+  stopLearning: () => {
+    set({ isLearning: false, currentWordIndex: 0 });
   },
 
   nextWord: () => {

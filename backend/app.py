@@ -72,21 +72,16 @@ def init_sqlite():
     
     cursor.execute('SELECT COUNT(*) FROM words')
     if cursor.fetchone()[0] == 0:
-        mock_words = [
-            ("1", "abandon", "/əˈbændən/", "v. 放弃，抛弃；n. 放任，纵情", "He decided to abandon his plan.", "CET-4", "medium", "2024-01-01T00:00:00Z"),
-            ("2", "ability", "/əˈbɪləti/", "n. 能力，本领；才能", "She has the ability to learn quickly.", "CET-4", "easy", "2024-01-01T00:00:00Z"),
-            ("3", "abnormal", "/æbˈnɔːrml/", "adj. 不正常的，反常的", "The test results were abnormal.", "CET-6", "medium", "2024-01-01T00:00:00Z"),
-            ("4", "abolish", "/əˈbɑːlɪʃ/", "v. 废除，废止", "They plan to abolish the tax.", "CET-6", "hard", "2024-01-01T00:00:00Z"),
-            ("5", "abroad", "/əˈbrɔːd/", "adv. 在国外，到国外", "He studied abroad for two years.", "CET-4", "easy", "2024-01-01T00:00:00Z"),
-            ("6", "absence", "/ˈæbsəns/", "n. 缺席，不在；缺乏", "His absence was noticed by everyone.", "CET-4", "easy", "2024-01-01T00:00:00Z"),
-            ("7", "absolute", "/ˈæbsəluːt/", "adj. 绝对的，完全的", "I have absolute confidence in you.", "CET-6", "medium", "2024-01-01T00:00:00Z"),
-            ("8", "absorb", "/əbˈsɔːrb/", "v. 吸收；吸引...的注意", "Plants absorb carbon dioxide.", "CET-4", "medium", "2024-01-01T00:00:00Z"),
-            ("9", "abstract", "/ˈæbstrækt/", "adj. 抽象的；n. 摘要", "Beauty is an abstract concept.", "CET-6", "hard", "2024-01-01T00:00:00Z"),
-            ("10", "abundant", "/əˈbʌndənt/", "adj. 丰富的，充裕的", "The region has abundant natural resources.", "CET-6", "medium", "2024-01-01T00:00:00Z"),
-            ("11", "abuse", "/əˈbjuːs/", "v./n. 滥用；虐待；辱骂", "He was accused of abusing his power.", "CET-6", "medium", "2024-01-01T00:00:00Z"),
-            ("12", "academic", "/ˌækəˈdemɪk/", "adj. 学术的；学院的", "She has a strong academic background.", "CET-4", "easy", "2024-01-01T00:00:00Z"),
-        ]
-        cursor.executemany('INSERT INTO words VALUES (?, ?, ?, ?, ?, ?, ?, ?)', mock_words)
+        import json
+        word_data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'word_data.json')
+        with open(word_data_path, 'r', encoding='utf-8') as f:
+            words_data = json.load(f)
+        for idx, word in enumerate(words_data):
+            cursor.execute('''
+                INSERT INTO words (id, word, phonetic, meaning, example, category, difficulty, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (str(idx + 1), word['word'], word['phonetic'], word['meaning'], 
+                  word['example'], word['category'], word['difficulty'], "2024-01-01T00:00:00Z"))
     
     conn.commit()
     conn.close()
@@ -176,13 +171,19 @@ def update_word(word_id):
     
     conn = get_sqlite_conn()
     cursor = conn.cursor()
+    
+    allowed_fields = ['word', 'phonetic', 'meaning', 'example', 'category', 'difficulty']
     update_fields = []
     update_values = []
     for key, value in data.items():
-        if key != 'id':
+        if key in allowed_fields:
             update_fields.append(f"{key} = ?")
             update_values.append(value)
     update_values.append(word_id)
+    
+    if not update_fields:
+        conn.close()
+        return jsonify({"error": "No valid fields to update"}), 400
     
     cursor.execute(f'UPDATE words SET {", ".join(update_fields)} WHERE id = ?', update_values)
     conn.commit()
@@ -216,7 +217,19 @@ def get_learning_records():
     if use_supabase():
         try:
             response = supabase.table('learning_records').select('*').execute()
-            return jsonify(response.data), 200
+            records = []
+            for r in response.data:
+                records.append({
+                    'id': r['id'],
+                    'wordId': r['word_id'],
+                    'word': r['word'],
+                    'status': r['status'],
+                    'reviewCount': r['review_count'],
+                    'lastReviewAt': r['last_review_at'],
+                    'nextReviewAt': r['next_review_at'],
+                    'createdAt': r['created_at']
+                })
+            return jsonify(records), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 500
     
@@ -224,9 +237,30 @@ def get_learning_records():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM learning_records')
-    records = [dict(row) for row in cursor.fetchall()]
+    records = []
+    for row in cursor.fetchall():
+        r = dict(row)
+        records.append({
+            'id': r['id'],
+            'wordId': r['word_id'],
+            'word': r['word'],
+            'status': r['status'],
+            'reviewCount': r['review_count'],
+            'lastReviewAt': r['last_review_at'],
+            'nextReviewAt': r['next_review_at'],
+            'createdAt': r['created_at']
+        })
     conn.close()
     return jsonify(records), 200
+
+def get_next_review_interval(status: str, review_count: int) -> timedelta:
+    intervals = {
+        'new': [1, 2, 4, 7, 15],
+        'learning': [1, 3, 6, 10, 20],
+        'mastered': [3, 7, 14, 30, 60]
+    }
+    index = min(review_count, len(intervals.get(status, intervals['new'])) - 1)
+    return timedelta(days=intervals.get(status, intervals['new'])[index])
 
 @app.route('/api/learning-records', methods=['POST'])
 def create_learning_record():
@@ -238,19 +272,53 @@ def create_learning_record():
             if not word_response.data:
                 return jsonify({"error": "Word not found"}), 404
             
-            record = {
-                "id": str(uuid.uuid4()),
-                "word_id": data['wordId'],
-                "word": word_response.data['word'],
-                "status": data['status'],
-                "review_count": 1,
-                "last_review_at": datetime.utcnow().isoformat() + "Z",
-                "next_review_at": (datetime.utcnow() + timedelta(days=1)).isoformat() + "Z",
-                "created_at": datetime.utcnow().isoformat() + "Z"
-            }
+            existing_response = supabase.table('learning_records').select('*').eq('word_id', data['wordId']).single().execute()
             
-            response = supabase.table('learning_records').insert(record).execute()
-            return jsonify(response.data[0]), 201
+            if existing_response.data:
+                review_count = existing_response.data.get('review_count', 0) + 1
+                next_review = get_next_review_interval(data['status'], review_count)
+                record = {
+                    "status": data['status'],
+                    "review_count": review_count,
+                    "last_review_at": datetime.utcnow().isoformat() + "Z",
+                    "next_review_at": (datetime.utcnow() + next_review).isoformat() + "Z"
+                }
+                response = supabase.table('learning_records').update(record).eq('word_id', data['wordId']).execute()
+                r = response.data[0]
+                return jsonify({
+                    'id': r['id'],
+                    'wordId': r['word_id'],
+                    'word': r['word'],
+                    'status': r['status'],
+                    'reviewCount': r['review_count'],
+                    'lastReviewAt': r['last_review_at'],
+                    'nextReviewAt': r['next_review_at'],
+                    'createdAt': r['created_at']
+                }), 200
+            else:
+                next_review = get_next_review_interval(data['status'], 1)
+                record = {
+                    "id": str(uuid.uuid4()),
+                    "word_id": data['wordId'],
+                    "word": word_response.data['word'],
+                    "status": data['status'],
+                    "review_count": 1,
+                    "last_review_at": datetime.utcnow().isoformat() + "Z",
+                    "next_review_at": (datetime.utcnow() + next_review).isoformat() + "Z",
+                    "created_at": datetime.utcnow().isoformat() + "Z"
+                }
+                response = supabase.table('learning_records').insert(record).execute()
+                r = response.data[0]
+                return jsonify({
+                    'id': r['id'],
+                    'wordId': r['word_id'],
+                    'word': r['word'],
+                    'status': r['status'],
+                    'reviewCount': r['review_count'],
+                    'lastReviewAt': r['last_review_at'],
+                    'nextReviewAt': r['next_review_at'],
+                    'createdAt': r['created_at']
+                }), 201
         except Exception as e:
             return jsonify({"error": str(e)}), 500
     
@@ -264,25 +332,64 @@ def create_learning_record():
         conn.close()
         return jsonify({"error": "Word not found"}), 404
     
-    record = {
-        "id": str(uuid.uuid4()),
-        "word_id": data['wordId'],
-        "word": word['word'],
-        "status": data['status'],
-        "review_count": 1,
-        "last_review_at": datetime.utcnow().isoformat() + "Z",
-        "next_review_at": (datetime.utcnow() + timedelta(days=1)).isoformat() + "Z",
-        "created_at": datetime.utcnow().isoformat() + "Z"
-    }
+    cursor.execute('SELECT * FROM learning_records WHERE word_id = ?', (data['wordId'],))
+    existing_record = cursor.fetchone()
     
-    cursor.execute('''
-        INSERT INTO learning_records (id, word_id, word, status, review_count, last_review_at, next_review_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (record['id'], record['word_id'], record['word'], record['status'], record['review_count'], 
-          record['last_review_at'], record['next_review_at'], record['created_at']))
-    conn.commit()
-    conn.close()
-    return jsonify(record), 201
+    if existing_record:
+        review_count = existing_record['review_count'] + 1
+        next_review = get_next_review_interval(data['status'], review_count)
+        cursor.execute('''
+            UPDATE learning_records 
+            SET status = ?, review_count = ?, last_review_at = ?, next_review_at = ?
+            WHERE word_id = ?
+        ''', (data['status'], review_count, datetime.utcnow().isoformat() + "Z", 
+              (datetime.utcnow() + next_review).isoformat() + "Z", data['wordId']))
+        conn.commit()
+        
+        cursor.execute('SELECT * FROM learning_records WHERE word_id = ?', (data['wordId'],))
+        updated_record = cursor.fetchone()
+        conn.close()
+        r = dict(updated_record)
+        return jsonify({
+            'id': r['id'],
+            'wordId': r['word_id'],
+            'word': r['word'],
+            'status': r['status'],
+            'reviewCount': r['review_count'],
+            'lastReviewAt': r['last_review_at'],
+            'nextReviewAt': r['next_review_at'],
+            'createdAt': r['created_at']
+        }), 200
+    else:
+        next_review = get_next_review_interval(data['status'], 1)
+        record = {
+            "id": str(uuid.uuid4()),
+            "word_id": data['wordId'],
+            "word": word['word'],
+            "status": data['status'],
+            "review_count": 1,
+            "last_review_at": datetime.utcnow().isoformat() + "Z",
+            "next_review_at": (datetime.utcnow() + next_review).isoformat() + "Z",
+            "created_at": datetime.utcnow().isoformat() + "Z"
+        }
+        
+        cursor.execute('''
+            INSERT INTO learning_records (id, word_id, word, status, review_count, last_review_at, next_review_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (record['id'], record['word_id'], record['word'], record['status'], record['review_count'], 
+              record['last_review_at'], record['next_review_at'], record['created_at']))
+        conn.commit()
+        conn.close()
+        return jsonify({
+            'id': record['id'],
+            'wordId': record['word_id'],
+            'word': record['word'],
+            'status': record['status'],
+            'reviewCount': record['review_count'],
+            'lastReviewAt': record['last_review_at'],
+            'nextReviewAt': record['next_review_at'],
+            'createdAt': record['created_at']
+        }), 201
 
 @app.route('/api/stats/daily', methods=['GET'])
 def get_daily_stats():
@@ -301,12 +408,15 @@ def get_daily_stats():
     conn.close()
     
     if not stats:
+        today = datetime.now()
         mock_stats = [
-            {"date": "2024-01-15", "words_learned": 10, "words_reviewed": 15, "accuracy": 85},
-            {"date": "2024-01-16", "words_learned": 12, "words_reviewed": 18, "accuracy": 90},
-            {"date": "2024-01-17", "words_learned": 8, "words_reviewed": 20, "accuracy": 88},
-            {"date": "2024-01-18", "words_learned": 15, "words_reviewed": 12, "accuracy": 92},
-            {"date": "2024-01-19", "words_learned": 11, "words_reviewed": 16, "accuracy": 87},
+            {"date": (today - timedelta(days=6)).strftime("%Y-%m-%d"), "words_learned": 8, "words_reviewed": 12, "accuracy": 82},
+            {"date": (today - timedelta(days=5)).strftime("%Y-%m-%d"), "words_learned": 10, "words_reviewed": 15, "accuracy": 85},
+            {"date": (today - timedelta(days=4)).strftime("%Y-%m-%d"), "words_learned": 12, "words_reviewed": 18, "accuracy": 90},
+            {"date": (today - timedelta(days=3)).strftime("%Y-%m-%d"), "words_learned": 8, "words_reviewed": 20, "accuracy": 88},
+            {"date": (today - timedelta(days=2)).strftime("%Y-%m-%d"), "words_learned": 15, "words_reviewed": 12, "accuracy": 92},
+            {"date": (today - timedelta(days=1)).strftime("%Y-%m-%d"), "words_learned": 14, "words_reviewed": 18, "accuracy": 89},
+            {"date": today.strftime("%Y-%m-%d"), "words_learned": 11, "words_reviewed": 16, "accuracy": 87},
         ]
         return jsonify(mock_stats), 200
     
@@ -329,8 +439,10 @@ def get_weekly_stats():
     conn.close()
     
     if not stats:
+        today = datetime.now()
+        week_number = today.isocalendar()[1]
         mock_stats = [
-            {"date": "2024-W02", "words_learned": 56, "words_reviewed": 81, "accuracy": 88},
+            {"date": f"{today.year}-W{week_number:02d}", "words_learned": 56, "words_reviewed": 81, "accuracy": 88},
         ]
         return jsonify(mock_stats), 200
     
