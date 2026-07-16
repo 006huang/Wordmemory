@@ -1,18 +1,38 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { useWordStore } from '../store/wordStore';
 import { categories } from '../data/mockWords';
-import { BookOpen, CheckCircle, Clock, Target } from 'lucide-react';
+import { BookOpen, CheckCircle, Clock, Target, Flame, Trophy, Calendar } from 'lucide-react';
+import { api } from '../api/wordApi';
 
 export const StatsPage = () => {
   const { words, learningRecords, dailyStats, fetchWords, fetchLearningRecords, fetchDailyStats, fetchWeeklyStats } = useWordStore();
+  const [achievements, setAchievements] = useState<{
+    streak: number;
+    totalMastered: number;
+    totalReviews: number;
+    learningDays: number;
+    achievements: {
+      id: string;
+      name: string;
+      description: string;
+      icon: string;
+      progress: number;
+    }[];
+  }>({ streak: 0, totalMastered: 0, totalReviews: 0, learningDays: 0, achievements: [] });
 
   useEffect(() => {
     fetchWords();
     fetchLearningRecords();
     fetchDailyStats();
     fetchWeeklyStats();
+    fetchAchievements();
   }, [fetchWords, fetchLearningRecords, fetchDailyStats, fetchWeeklyStats]);
+
+  const fetchAchievements = async () => {
+    const data = await api.getAchievements();
+    setAchievements(data);
+  };
 
   const masteredWordIds = new Set(learningRecords.filter((r) => r.status === 'mastered').map((r) => r.wordId));
   const learningWordIds = new Set(learningRecords.filter((r) => r.status === 'learning').map((r) => r.wordId));
@@ -56,7 +76,7 @@ export const StatsPage = () => {
         <p className="text-gray-600">追踪你的学习进度和成果</p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <div className="card text-center">
           <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center mx-auto mb-2">
             <BookOpen className="w-6 h-6 text-primary-500" />
@@ -194,6 +214,54 @@ export const StatsPage = () => {
               />
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="card mt-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">学习成就</h3>
+        
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          <div className="card text-center">
+            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+              <Flame className="w-6 h-6 text-orange-500" />
+            </div>
+            <div className="text-2xl font-bold text-orange-600">{achievements.streak}</div>
+            <div className="text-sm text-gray-600">连续学习天数</div>
+          </div>
+          <div className="card text-center">
+            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+              <Trophy className="w-6 h-6 text-green-500" />
+            </div>
+            <div className="text-2xl font-bold text-green-600">{achievements.totalMastered}</div>
+            <div className="text-sm text-gray-600">累计掌握单词</div>
+          </div>
+          <div className="card text-center">
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+              <BookOpen className="w-6 h-6 text-blue-500" />
+            </div>
+            <div className="text-2xl font-bold text-blue-600">{achievements.totalReviews}</div>
+            <div className="text-sm text-gray-600">累计复习次数</div>
+          </div>
+          <div className="card text-center">
+            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+              <Calendar className="w-6 h-6 text-purple-500" />
+            </div>
+            <div className="text-2xl font-bold text-purple-600">{achievements.learningDays}</div>
+            <div className="text-sm text-gray-600">学习天数</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {achievements.achievements.map((achievement) => (
+            <div 
+              key={achievement.id} 
+              className="card p-3 text-center bg-gradient-to-br from-yellow-50 to-orange-50 border-yellow-200"
+            >
+              <div className="text-3xl mb-2">{achievement.icon}</div>
+              <div className="font-semibold text-gray-800 text-sm">{achievement.name}</div>
+              <div className="text-xs text-gray-500">{achievement.description}</div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

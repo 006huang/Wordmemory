@@ -8,6 +8,7 @@ interface WordStore {
   learningRecords: LearningRecord[];
   dailyStats: DailyStats[];
   weeklyStats: DailyStats[];
+  reviewWords: Word[];
   currentWordIndex: number;
   isLearning: boolean;
   loading: boolean;
@@ -16,6 +17,7 @@ interface WordStore {
   fetchLearningRecords: () => Promise<void>;
   fetchDailyStats: () => Promise<void>;
   fetchWeeklyStats: () => Promise<void>;
+  fetchReviewWords: () => Promise<void>;
   startLearning: () => void;
   stopLearning: () => void;
   nextWord: () => void;
@@ -30,6 +32,7 @@ export const useWordStore = create<WordStore>((set, get) => ({
   learningRecords: [],
   dailyStats: [],
   weeklyStats: [],
+  reviewWords: [],
   currentWordIndex: 0,
   isLearning: false,
   loading: false,
@@ -77,6 +80,18 @@ export const useWordStore = create<WordStore>((set, get) => ({
       set({ weeklyStats: data || [] });
     } catch {
       set({ weeklyStats: [] });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  fetchReviewWords: async () => {
+    set({ loading: true });
+    try {
+      const data = await api.getReviewWords();
+      set({ reviewWords: data || [] });
+    } catch {
+      set({ reviewWords: [] });
     } finally {
       set({ loading: false });
     }

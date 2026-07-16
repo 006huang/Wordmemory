@@ -10,10 +10,36 @@ const client = axios.create({
   },
 });
 
+client.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+const cache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000;
+
+const getCached = <T>(key: string): T | null => {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+  return null;
+};
+
+const setCached = (key: string, data: any) => {
+  cache.set(key, { data, timestamp: Date.now() });
+};
+
 export const api = {
   getWords: async (): Promise<Word[]> => {
+    const cached = getCached<Word[]>('words');
+    if (cached) return cached;
     try {
       const response = await client.get('/words');
+      setCached('words', response.data);
       return response.data;
     } catch {
       return [];
@@ -56,8 +82,11 @@ export const api = {
   },
 
   getLearningRecords: async (): Promise<LearningRecord[]> => {
+    const cached = getCached<LearningRecord[]>('learningRecords');
+    if (cached) return cached;
     try {
       const response = await client.get('/learning-records');
+      setCached('learningRecords', response.data);
       return response.data;
     } catch {
       return [];
@@ -88,5 +117,96 @@ export const api = {
     } catch {
       return [];
     }
+  },
+
+  getReviewWords: async (): Promise<Word[]> => {
+    try {
+      const response = await client.get('/review-words');
+      return response.data;
+    } catch {
+      return [];
+    }
+  },
+
+  getAchievements: async (): Promise<{
+    streak: number;
+    totalMastered: number;
+    totalReviews: number;
+    learningDays: number;
+    achievements: {
+      id: string;
+      name: string;
+      description: string;
+      icon: string;
+      progress: number;
+    }[];
+  }> => {
+    try {
+      const response = await client.get('/achievements');
+      return response.data;
+    } catch {
+      return { streak: 0, totalMastered: 0, totalReviews: 0, learningDays: 0, achievements: [] };
+    }
+  },
+
+  getWordbooks: async (): Promise<{ id: string; name: string; description: string; createdAt: string }[]> => {
+    try {
+      const response = await client.get('/wordbooks');
+      return response.data;
+    } catch {
+      return [];
+    }
+  },
+
+  createWordbook: async (name: string, description: string): Promise<{ id: string; name: string; description: string } | null> => {
+    try {
+      const response = await client.post('/wordbooks', { name, description });
+      return response.data;
+    } catch {
+      return null;
+    }
+  },
+
+  getWordbookWords: async (wordbookId: string): Promise<Word[]> => {
+    try {
+      const response = await client.get(`/wordbooks/${wordbookId}/words`);
+      return response.data;
+    } catch {
+      return [];
+    }
+  },
+
+  addWordToWordbook: async (wordbookId: string, wordId: string): Promise<void> => {
+    try {
+      await client.post(`/wordbooks/${wordbookId}/words`, { wordId });
+    } catch {
+      throw new Error('Failed to add word');
+    }
+  },
+
+  removeWordFromWordbook: async (wordbookId: string, wordId: string): Promise<void> => {
+    try {
+      await client.delete(`/wordbooks/${wordbookId}/words/${wordId}`);
+    } catch {
+      throw new Error('Failed to remove word');
+    }
+  },
+
+  deleteWordbook: async (wordbookId: string): Promise<void> => {
+    try {
+      await client.delete(`/wordbooks/${wordbookId}`);
+    } catch {
+      throw new Error('Failed to delete wordbook');
+    }
+  },
+
+  login: async (username: string, password: string): Promise<{ token: string; user: { id: string; username: string } }> => {
+    const response = await client.post('/login', { username, password });
+    return response.data;
+  },
+
+  register: async (username: string, password: string): Promise<{ token: string; user: { id: string; username: string } }> => {
+    const response = await client.post('/register', { username, password });
+    return response.data;
   },
 };

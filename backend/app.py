@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 import uuid
 from datetime import datetime, timedelta
 import sqlite3
+import bcrypt
+import jwt
 
 load_dotenv()
 
@@ -14,6 +16,7 @@ CORS(app)
 
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+SECRET_KEY = os.getenv('SECRET_KEY', 'wordmemory_secret_key')
 
 supabase: Client = None
 if SUPABASE_URL and SUPABASE_KEY:
@@ -24,6 +27,14 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wordmemory.d
 def init_sqlite():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS words (
             id TEXT PRIMARY KEY,
@@ -67,6 +78,23 @@ def init_sqlite():
             words_reviewed INTEGER DEFAULT 0,
             accuracy INTEGER DEFAULT 0,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS wordbooks (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS wordbook_words (
+            id TEXT PRIMARY KEY,
+            wordbook_id TEXT,
+            word_id TEXT,
+            FOREIGN KEY (wordbook_id) REFERENCES wordbooks(id),
+            FOREIGN KEY (word_id) REFERENCES words(id)
         )
     ''')
     
@@ -252,6 +280,37 @@ def get_learning_records():
         })
     conn.close()
     return jsonify(records), 200
+
+@app.route('/api/review-words', methods=['GET'])
+def get_review_words():
+    now = datetime.utcnow().isoformat() + "Z"
+    
+    if use_supabase():
+        try:
+            response = supabase.table('learning_records').select('*').lt('next_review_at', now).execute()
+            word_ids = [r['word_id'] for r in response.data]
+            if not word_ids:
+                return jsonify([]), 200
+            word_response = supabase.table('words').select('*').in_('id', word_ids).execute()
+            return jsonify(word_response.data), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    conn = get_sqlite_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute('SELECT word_id FROM learning_records WHERE next_review_at < ?', (now,))
+    word_ids = [row['word_id'] for row in cursor.fetchall()]
+    
+    if not word_ids:
+        conn.close()
+        return jsonify([]), 200
+    
+    placeholders = ','.join('?' * len(word_ids))
+    cursor.execute(f'SELECT * FROM words WHERE id IN ({placeholders})', word_ids)
+    words = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return jsonify(words), 200
 
 def get_next_review_interval(status: str, review_count: int) -> timedelta:
     intervals = {
@@ -447,6 +506,325 @@ def get_weekly_stats():
         return jsonify(mock_stats), 200
     
     return jsonify(stats), 200
+
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    
+    if not username or not password:
+        return jsonify({"error": "用户名和密码不能为空"}), 400
+    
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    if use_supabase():
+        try:
+            existing = supabase.table('users').select('*').eq('username', username).execute()
+            if existing.data:
+                return jsonify({"error": "用户名已存在"}), 400
+            
+            user = {
+                'id': str(uuid.uuid4()),
+                'username': username,
+                'password': hashed_password,
+                'created_at': datetime.utcnow().isoformat() + 'Z'
+            }
+            response = supabase.table('users').insert(user).execute()
+            token = generate_token(user['id'])
+            return jsonify({
+                'token': token,
+                'user': {
+                    'id': user['id'],
+                    'username': user['username']
+                }
+            }), 201
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({"error": "用户名已存在"}), 400
+    
+    user_id = str(uuid.uuid4())
+    cursor.execute('''
+        INSERT INTO users (id, username, password, created_at)
+        VALUES (?, ?, ?, ?)
+    ''', (user_id, username, hashed_password, datetime.utcnow().isoformat()))
+    conn.commit()
+    conn.close()
+    
+    token = generate_token(user_id)
+    return jsonify({
+        'token': token,
+        'user': {
+            'id': user_id,
+            'username': username
+        }
+    }), 201
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    
+    if not username or not password:
+        return jsonify({"error": "用户名和密码不能为空"}), 400
+    
+    if use_supabase():
+        try:
+            response = supabase.table('users').select('*').eq('username', username).execute()
+            if not response.data:
+                return jsonify({"error": "用户名或密码错误"}), 401
+            
+            user = response.data[0]
+            if bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
+                token = generate_token(user['id'])
+                return jsonify({
+                    'token': token,
+                    'user': {
+                        'id': user['id'],
+                        'username': user['username']
+                    }
+                }), 200
+            else:
+                return jsonify({"error": "用户名或密码错误"}), 401
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    conn = get_sqlite_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
+    user = cursor.fetchone()
+    conn.close()
+    
+    if not user or not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
+        return jsonify({"error": "用户名或密码错误"}), 401
+    
+    token = generate_token(user['id'])
+    return jsonify({
+        'token': token,
+        'user': {
+            'id': user['id'],
+            'username': user['username']
+        }
+    }), 200
+
+def generate_token(user_id):
+    payload = {
+        'user_id': user_id,
+        'exp': datetime.utcnow() + timedelta(days=7)
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm='HS256')
+
+def verify_token(token):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+        return payload['user_id']
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+@app.route('/api/wordbooks', methods=['GET'])
+def get_wordbooks():
+    if use_supabase():
+        try:
+            response = supabase.table('wordbooks').select('*').execute()
+            return jsonify(response.data), 200
+        except Exception as e:
+            return jsonify([]), 200
+    
+    conn = get_sqlite_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM wordbooks')
+    wordbooks = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return jsonify(wordbooks), 200
+
+@app.route('/api/wordbooks', methods=['POST'])
+def create_wordbook():
+    data = request.get_json()
+    wordbook = {
+        'id': str(uuid.uuid4()),
+        'name': data.get('name', 'Untitled'),
+        'description': data.get('description', ''),
+        'created_at': datetime.utcnow().isoformat() + 'Z'
+    }
+    
+    if use_supabase():
+        try:
+            response = supabase.table('wordbooks').insert(wordbook).execute()
+            return jsonify(response.data[0]), 201
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO wordbooks (id, name, description, created_at)
+        VALUES (?, ?, ?, ?)
+    ''', (wordbook['id'], wordbook['name'], wordbook['description'], wordbook['created_at']))
+    conn.commit()
+    conn.close()
+    return jsonify(wordbook), 201
+
+@app.route('/api/wordbooks/<id>/words', methods=['GET'])
+def get_wordbook_words(id):
+    if use_supabase():
+        try:
+            response = supabase.table('wordbook_words').select('*').eq('wordbook_id', id).execute()
+            word_ids = [r['word_id'] for r in response.data]
+            if word_ids:
+                word_response = supabase.table('words').select('*').in_('id', word_ids).execute()
+                return jsonify(word_response.data), 200
+            return jsonify([]), 200
+        except Exception as e:
+            return jsonify([]), 200
+    
+    conn = get_sqlite_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute('SELECT word_id FROM wordbook_words WHERE wordbook_id = ?', (id,))
+    word_ids = [row['word_id'] for row in cursor.fetchall()]
+    
+    if not word_ids:
+        conn.close()
+        return jsonify([]), 200
+    
+    placeholders = ','.join('?' * len(word_ids))
+    cursor.execute(f'SELECT * FROM words WHERE id IN ({placeholders})', word_ids)
+    words = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return jsonify(words), 200
+
+@app.route('/api/wordbooks/<id>/words', methods=['POST'])
+def add_word_to_wordbook(id):
+    data = request.get_json()
+    word_id = data.get('wordId')
+    
+    if use_supabase():
+        try:
+            exists = supabase.table('wordbook_words').select('*').eq('wordbook_id', id).eq('word_id', word_id).execute()
+            if not exists.data:
+                supabase.table('wordbook_words').insert({
+                    'wordbook_id': id,
+                    'word_id': word_id
+                }).execute()
+            return jsonify({"message": "Word added"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM wordbook_words WHERE wordbook_id = ? AND word_id = ?', (id, word_id))
+    if not cursor.fetchone():
+        cursor.execute('INSERT INTO wordbook_words (wordbook_id, word_id) VALUES (?, ?)', (id, word_id))
+        conn.commit()
+    conn.close()
+    return jsonify({"message": "Word added"}), 200
+
+@app.route('/api/wordbooks/<id>/words/<word_id>', methods=['DELETE'])
+def remove_word_from_wordbook(id, word_id):
+    if use_supabase():
+        try:
+            supabase.table('wordbook_words').delete().eq('wordbook_id', id).eq('word_id', word_id).execute()
+            return jsonify({"message": "Word removed"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM wordbook_words WHERE wordbook_id = ? AND word_id = ?', (id, word_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Word removed"}), 200
+
+@app.route('/api/wordbooks/<id>', methods=['DELETE'])
+def delete_wordbook(id):
+    if use_supabase():
+        try:
+            supabase.table('wordbook_words').delete().eq('wordbook_id', id).execute()
+            supabase.table('wordbooks').delete().eq('id', id).execute()
+            return jsonify({"message": "Wordbook deleted"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM wordbook_words WHERE wordbook_id = ?', (id,))
+    cursor.execute('DELETE FROM wordbooks WHERE id = ?', (id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Wordbook deleted"}), 200
+
+@app.route('/api/achievements', methods=['GET'])
+def get_achievements():
+    if use_supabase():
+        try:
+            response = supabase.table('learning_records').select('*').execute()
+            records = response.data
+        except Exception:
+            records = []
+    else:
+        conn = get_sqlite_conn()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM learning_records')
+        records = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+    
+    mastered_count = len([r for r in records if r.get('status') == 'mastered'])
+    total_reviews = sum(r.get('review_count', 0) for r in records)
+    
+    dates = set()
+    for r in records:
+        last_review = r.get('last_review_at') or r.get('created_at')
+        if last_review:
+            date_str = last_review[:10]
+            dates.add(date_str)
+    
+    streak = 0
+    today = datetime.now().strftime('%Y-%m-%d')
+    current_date = datetime.now()
+    
+    for i in range(365):
+        check_date = (current_date - timedelta(days=i)).strftime('%Y-%m-%d')
+        if check_date in dates:
+            streak += 1
+        elif i > 0:
+            break
+    
+    achievements = []
+    
+    if mastered_count >= 10:
+        achievements.append({'id': 'first_steps', 'name': '初学者', 'description': '掌握10个单词', 'icon': '🌱', 'progress': min(mastered_count, 10)})
+    if mastered_count >= 50:
+        achievements.append({'id': 'word_collector', 'name': '词汇收藏家', 'description': '掌握50个单词', 'icon': '📚', 'progress': min(mastered_count, 50)})
+    if mastered_count >= 100:
+        achievements.append({'id': 'vocabulary_master', 'name': '词汇大师', 'description': '掌握100个单词', 'icon': '🏆', 'progress': min(mastered_count, 100)})
+    if streak >= 3:
+        achievements.append({'id': 'streak_3', 'name': '坚持不懈', 'description': '连续学习3天', 'icon': '🔥', 'progress': min(streak, 3)})
+    if streak >= 7:
+        achievements.append({'id': 'streak_7', 'name': '一周达人', 'description': '连续学习7天', 'icon': '⭐', 'progress': min(streak, 7)})
+    if streak >= 30:
+        achievements.append({'id': 'streak_30', 'name': '月度冠军', 'description': '连续学习30天', 'icon': '👑', 'progress': min(streak, 30)})
+    if total_reviews >= 100:
+        achievements.append({'id': 'review_master', 'name': '复习达人', 'description': '累计复习100次', 'icon': '🔄', 'progress': min(total_reviews, 100)})
+    
+    return jsonify({
+        'streak': streak,
+        'totalMastered': mastered_count,
+        'totalReviews': total_reviews,
+        'learningDays': len(dates),
+        'achievements': achievements
+    }), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
