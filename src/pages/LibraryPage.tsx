@@ -187,9 +187,8 @@ export const LibraryPage = () => {
                 <tr className="border-b bg-gray-50">
                   <th className="text-left py-3 px-4 text-gray-600 font-medium w-20">单词</th>
                   <th className="text-left py-3 px-4 text-gray-600 font-medium w-32">音标</th>
-                  <th className="text-left py-3 px-4 text-gray-600 font-medium w-80">释义</th>
-                  <th className="text-left py-3 px-4 text-gray-600 font-medium w-20">分类</th>
-                  <th className="text-left py-3 px-4 text-gray-600 font-medium w-16">难度</th>
+                  <th className="text-left py-3 px-4 text-gray-600 font-medium flex-1">释义</th>
+                  <th className="text-left py-3 px-4 text-gray-600 font-medium w-32">分类/难度</th>
                   <th className="text-right py-3 px-4 text-gray-600 font-medium w-16">操作</th>
                 </tr>
               </thead>
@@ -207,18 +206,18 @@ export const LibraryPage = () => {
                     <td className="py-3 px-4 text-gray-500 font-mono">{word.phonetic}</td>
                     <td className="py-3 px-4 text-gray-700">{word.meaning}</td>
                     <td className="py-3 px-4">
-                      <span className="px-2 py-1 bg-primary-100 text-primary-700 rounded text-sm">
-                        {word.category}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded text-sm ${
-                        word.difficulty === 'easy' ? 'bg-green-100 text-green-700' :
-                        word.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-red-100 text-red-700'
-                      }`}>
-                        {word.difficulty === 'easy' ? '简单' : word.difficulty === 'medium' ? '中等' : '困难'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-1 bg-primary-100 text-primary-700 rounded text-sm">
+                          {word.category}
+                        </span>
+                        <span className={`px-2 py-1 rounded text-sm ${
+                          word.difficulty === 'easy' ? 'bg-green-100 text-green-700' :
+                          word.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {word.difficulty === 'easy' ? '简单' : word.difficulty === 'medium' ? '中等' : '困难'}
+                        </span>
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-right">
                       <button
