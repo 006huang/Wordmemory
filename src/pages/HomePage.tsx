@@ -17,8 +17,6 @@ export const HomePage = () => {
   const { words, learningRecords, currentWordIndex, isLearning, startLearning, stopLearning, nextWord, prevWord, markWord, fetchWords, fetchLearningRecords } = useWordStore();
   const [showAnswer, setShowAnswer] = useState(false);
   const [sessionWords, setSessionWords] = useState<Word[]>([]);
-  const [masteredCount, setMasteredCount] = useState(0);
-  const [learningCount, setLearningCount] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'mastered' | 'learning' | 'unlearned' | null>(null);
 
   useEffect(() => {
@@ -38,8 +36,6 @@ export const HomePage = () => {
       
       setSessionWords(selectedWords);
       setShowAnswer(false);
-      setMasteredCount(0);
-      setLearningCount(0);
     }
   }, [isLearning, words, learningRecords]);
 
@@ -78,7 +74,6 @@ export const HomePage = () => {
   const handleMarkMastered = async () => {
     if (currentWord) {
       await markWord(currentWord.id, 'mastered');
-      setMasteredCount((prev) => prev + 1);
       if (currentWordIndex >= sessionWords.length - 1) {
         setSessionWords([]);
       } else {
@@ -90,7 +85,6 @@ export const HomePage = () => {
   const handleMarkLearning = async () => {
     if (currentWord) {
       await markWord(currentWord.id, 'learning');
-      setLearningCount((prev) => prev + 1);
       if (currentWordIndex >= sessionWords.length - 1) {
         setSessionWords([]);
       } else {
@@ -102,8 +96,6 @@ export const HomePage = () => {
   const handleReset = () => {
     stopLearning();
     setSessionWords([]);
-    setMasteredCount(0);
-    setLearningCount(0);
     fetchLearningRecords();
   };
 
@@ -245,10 +237,10 @@ export const HomePage = () => {
         </div>
         <div className="flex gap-4">
           <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
-            已掌握: {masteredCount}
+            已掌握: {totalMastered}
           </span>
           <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm">
-            学习中: {learningCount}
+            学习中: {totalLearning}
           </span>
         </div>
       </div>

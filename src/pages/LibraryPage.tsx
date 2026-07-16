@@ -65,19 +65,19 @@ export const LibraryPage = () => {
         <h1 className="text-2xl font-bold text-gray-800 mb-4">词库管理</h1>
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
               placeholder="搜索单词..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="input-field pl-10"
+              className="w-full py-3 pr-4 pl-12 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="input-field"
+            className="input-field md:w-32"
           >
             <option value="">全部分类</option>
             {categories.map((cat) => (
@@ -162,52 +162,32 @@ export const LibraryPage = () => {
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">单词</label>
-                <input
-                  type="text"
-                  className="input-field"
-                  value={newWord.word}
-                  onChange={(e) => setNewWord({ ...newWord, word: e.target.value })}
-                  placeholder="例如: abandon"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">音标</label>
-                <input
-                  type="text"
-                  className="input-field"
-                  value={newWord.phonetic}
-                  onChange={(e) => setNewWord({ ...newWord, phonetic: e.target.value })}
-                  placeholder="例如: /əˈbændən/"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">释义</label>
-                <textarea
-                  className="input-field"
-                  value={newWord.meaning}
-                  onChange={(e) => setNewWord({ ...newWord, meaning: e.target.value })}
-                  placeholder="例如: v. 放弃，抛弃"
-                  rows={2}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">例句</label>
-                <textarea
-                  className="input-field"
-                  value={newWord.example}
-                  onChange={(e) => setNewWord({ ...newWord, example: e.target.value })}
-                  placeholder="例如: He decided to abandon his plan."
-                  rows={2}
-                />
-              </div>
-              <div className="flex gap-4">
+            <div className="space-y-2">
+              <div className="flex gap-2">
                 <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">分类</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">单词</label>
+                  <input
+                    type="text"
+                    className="input-field text-sm"
+                    value={newWord.word}
+                    onChange={(e) => setNewWord({ ...newWord, word: e.target.value })}
+                    placeholder="单词"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">音标</label>
+                  <input
+                    type="text"
+                    className="input-field text-sm"
+                    value={newWord.phonetic}
+                    onChange={(e) => setNewWord({ ...newWord, phonetic: e.target.value })}
+                    placeholder="音标"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">分类</label>
                   <select
-                    className="input-field"
+                    className="input-field text-sm"
                     value={newWord.category}
                     onChange={(e) => setNewWord({ ...newWord, category: e.target.value })}
                   >
@@ -216,10 +196,10 @@ export const LibraryPage = () => {
                     ))}
                   </select>
                 </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">难度</label>
+                <div className="w-24">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">难度</label>
                   <select
-                    className="input-field"
+                    className="input-field text-sm"
                     value={newWord.difficulty}
                     onChange={(e) => setNewWord({ ...newWord, difficulty: e.target.value as 'easy' | 'medium' | 'hard' })}
                   >
@@ -228,6 +208,26 @@ export const LibraryPage = () => {
                     <option value="hard">困难</option>
                   </select>
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">释义</label>
+                <input
+                  type="text"
+                  className="input-field text-sm"
+                  value={newWord.meaning}
+                  onChange={(e) => setNewWord({ ...newWord, meaning: e.target.value })}
+                  placeholder="输入释义"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">例句</label>
+                <input
+                  type="text"
+                  className="input-field text-sm"
+                  value={newWord.example}
+                  onChange={(e) => setNewWord({ ...newWord, example: e.target.value })}
+                  placeholder="输入例句"
+                />
               </div>
             </div>
 
