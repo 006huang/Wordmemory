@@ -54,6 +54,8 @@ export const HomePage = () => {
   const [spellingInput, setSpellingInput] = useState('');
   const [spellingResult, setSpellingResult] = useState<'correct' | 'wrong' | null>(null);
   const [choices, setChoices] = useState<{ word: string; meaning: string; isCorrect: boolean }[]>([]);
+  const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
+  const [choiceResult, setChoiceResult] = useState<'correct' | 'wrong' | null>(null);
 
   useEffect(() => {
     fetchWords();
@@ -121,6 +123,8 @@ export const HomePage = () => {
     }
     setSpellingInput('');
     setSpellingResult(null);
+    setSelectedChoice(null);
+    setChoiceResult(null);
   }, [currentWord, studyMode]);
 
   const handleStartLearning = () => {
@@ -180,19 +184,33 @@ export const HomePage = () => {
     }
   };
 
-  const handleChoiceSelect = (choice: { word: string; meaning: string; isCorrect: boolean }) => {
+  const handleChoiceSelect = (choice: { word: string; meaning: string; isCorrect: boolean }, index: number) => {
+    setSelectedChoice(index);
     if (choice.isCorrect) {
-      handleMarkMastered();
+      setChoiceResult('correct');
+      setTimeout(() => {
+        handleMarkMastered();
+      }, 1200);
     } else {
-      handleMarkLearning();
+      setChoiceResult('wrong');
+      setTimeout(() => {
+        handleMarkLearning();
+      }, 1500);
     }
   };
 
-  const handleListeningChoice = (word: string) => {
+  const handleListeningChoice = (word: string, index: number) => {
+    setSelectedChoice(index);
     if (word.toLowerCase() === currentWord.word.toLowerCase()) {
-      handleMarkMastered();
+      setChoiceResult('correct');
+      setTimeout(() => {
+        handleMarkMastered();
+      }, 1200);
     } else {
-      handleMarkLearning();
+      setChoiceResult('wrong');
+      setTimeout(() => {
+        handleMarkLearning();
+      }, 1500);
     }
   };
 
@@ -525,16 +543,50 @@ export const HomePage = () => {
           </div>
 
           <div className="space-y-3">
-            {choices.map((choice, index) => (
-              <button
-                key={index}
-                className="w-full p-4 text-left rounded-lg border-2 hover:border-primary-300 transition-colors"
-                onClick={() => handleChoiceSelect(choice)}
-              >
-                <div className="text-lg text-gray-800">{choice.meaning}</div>
-              </button>
-            ))}
+            {choices.map((choice, index) => {
+              const isSelected = selectedChoice === index;
+              const isCorrectChoice = choice.isCorrect;
+              let btnClass = 'border-gray-200 hover:border-primary-300';
+              
+              if (isSelected) {
+                if (isCorrectChoice) {
+                  btnClass = 'border-green-500 bg-green-50 animate-pulse';
+                } else {
+                  btnClass = 'border-red-500 bg-red-50 animate-shake';
+                }
+              } else if (selectedChoice !== null && isCorrectChoice) {
+                btnClass = 'border-green-500 bg-green-50';
+              }
+              
+              return (
+                <button
+                  key={index}
+                  className={`w-full p-4 text-left rounded-lg border-2 transition-all ${btnClass}`}
+                  onClick={() => handleChoiceSelect(choice, index)}
+                  disabled={selectedChoice !== null}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="text-lg text-gray-800">{choice.meaning}</div>
+                    {isSelected && isCorrectChoice && (
+                      <div className="text-green-500">✓ 正确!</div>
+                    )}
+                    {isSelected && !isCorrectChoice && (
+                      <div className="text-red-500">✗ 错误</div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
+
+          {selectedChoice !== null && choiceResult === 'wrong' && (
+            <div className="mt-4 p-3 bg-yellow-50 rounded-lg text-center">
+              <span className="text-yellow-700">正确答案: </span>
+              <span className="font-bold text-yellow-800">
+                {choices.find((c) => c.isCorrect)?.meaning}
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -552,16 +604,48 @@ export const HomePage = () => {
           </div>
 
           <div className="space-y-3">
-            {choices.map((choice, index) => (
-              <button
-                key={index}
-                className="w-full p-4 rounded-lg border-2 hover:border-primary-300 transition-colors"
-                onClick={() => handleListeningChoice(choice.word)}
-              >
-                <div className="text-xl font-medium text-gray-800">{choice.word}</div>
-              </button>
-            ))}
+            {choices.map((choice, index) => {
+              const isSelected = selectedChoice === index;
+              const isCorrectChoice = choice.word.toLowerCase() === currentWord.word.toLowerCase();
+              let btnClass = 'border-gray-200 hover:border-primary-300';
+              
+              if (isSelected) {
+                if (isCorrectChoice) {
+                  btnClass = 'border-green-500 bg-green-50 animate-pulse';
+                } else {
+                  btnClass = 'border-red-500 bg-red-50 animate-shake';
+                }
+              } else if (selectedChoice !== null && isCorrectChoice) {
+                btnClass = 'border-green-500 bg-green-50';
+              }
+              
+              return (
+                <button
+                  key={index}
+                  className={`w-full p-4 rounded-lg border-2 transition-all ${btnClass}`}
+                  onClick={() => handleListeningChoice(choice.word, index)}
+                  disabled={selectedChoice !== null}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="text-xl font-medium text-gray-800">{choice.word}</div>
+                    {isSelected && isCorrectChoice && (
+                      <div className="text-green-500">✓ 正确!</div>
+                    )}
+                    {isSelected && !isCorrectChoice && (
+                      <div className="text-red-500">✗ 错误</div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
+
+          {selectedChoice !== null && choiceResult === 'wrong' && (
+            <div className="mt-4 p-3 bg-yellow-50 rounded-lg text-center">
+              <span className="text-yellow-700">正确答案: </span>
+              <span className="font-bold text-yellow-800">{currentWord.word}</span>
+            </div>
+          )}
         </div>
       )}
 
