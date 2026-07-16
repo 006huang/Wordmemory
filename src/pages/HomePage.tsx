@@ -84,14 +84,16 @@ export const HomePage = () => {
       setSpellingInput('');
       setSpellingResult(null);
       
-      if (studyMode === 'choice' && selectedWords.length > 0) {
+      if ((studyMode === 'choice' || studyMode === 'listening') && selectedWords.length > 0) {
         generateChoices(selectedWords[0]);
       }
     }
   }, [isLearning, words, learningRecords, reviewWords, mode, studyMode]);
 
   const generateChoices = (currentWord: Word) => {
-    const otherWords = words.filter((w) => w.id !== currentWord.id);
+    const allWords = [...words, ...reviewWords];
+    const uniqueWords = allWords.filter((w, i, arr) => arr.findIndex((x) => x.id === w.id) === i);
+    const otherWords = uniqueWords.filter((w) => w.id !== currentWord.id);
     const shuffledOthers = [...otherWords].sort(() => Math.random() - 0.5).slice(0, 3);
     
     const allChoices = [
@@ -118,7 +120,7 @@ export const HomePage = () => {
   const currentWord = sessionWords[currentWordIndex];
 
   useEffect(() => {
-    if (studyMode === 'choice' && currentWord) {
+    if ((studyMode === 'choice' || studyMode === 'listening') && currentWord) {
       generateChoices(currentWord);
     }
     setSpellingInput('');
