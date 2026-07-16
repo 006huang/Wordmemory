@@ -19,6 +19,7 @@ export const HomePage = () => {
   const [sessionWords, setSessionWords] = useState<Word[]>([]);
   const [masteredCount, setMasteredCount] = useState(0);
   const [learningCount, setLearningCount] = useState(0);
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'mastered' | 'learning' | 'unlearned' | null>(null);
 
   useEffect(() => {
     fetchWords();
@@ -27,17 +28,32 @@ export const HomePage = () => {
 
   useEffect(() => {
     if (isLearning) {
-      setSessionWords(words.slice(0, 10));
+      const masteredIds = new Set(learningRecords.filter((r) => r.status === 'mastered').map((r) => r.wordId));
+      const availableWords = words.filter((w) => !masteredIds.has(w.id));
+      
+      const shuffled = [...availableWords].sort(() => Math.random() - 0.5);
+      const selectedWords = shuffled.slice(0, 10).length > 0 
+        ? shuffled.slice(0, 10) 
+        : [...words].sort(() => Math.random() - 0.5).slice(0, 10);
+      
+      setSessionWords(selectedWords);
       setShowAnswer(false);
       setMasteredCount(0);
       setLearningCount(0);
     }
-  }, [isLearning, words]);
+  }, [isLearning, words, learningRecords]);
 
   const masteredWordIds = new Set(learningRecords.filter((r) => r.status === 'mastered').map((r) => r.wordId));
   const learningWordIds = new Set(learningRecords.filter((r) => r.status === 'learning').map((r) => r.wordId));
   const totalMastered = masteredWordIds.size;
   const totalLearning = learningWordIds.size;
+  const totalNotLearned = words.length - totalMastered - totalLearning;
+
+  const filteredWords = selectedCategory === 'all' ? words :
+    selectedCategory === 'mastered' ? words.filter((w) => masteredWordIds.has(w.id)) :
+    selectedCategory === 'learning' ? words.filter((w) => learningWordIds.has(w.id)) :
+    selectedCategory === 'unlearned' ? words.filter((w) => !masteredWordIds.has(w.id) && !learningWordIds.has(w.id)) :
+    words;
 
   const currentWord = sessionWords[currentWordIndex];
 
@@ -99,20 +115,72 @@ export const HomePage = () => {
           <p className="text-gray-600">智能记忆算法，高效掌握英语词汇</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="card text-center">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+          <div 
+            className="card text-center cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={() => setSelectedCategory('all')}
+          >
             <div className="text-4xl font-bold text-primary-500 mb-2">{words.length}</div>
             <div className="text-gray-600">总词数</div>
           </div>
-          <div className="card text-center">
+          <div 
+            className="card text-center cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={() => setSelectedCategory('mastered')}
+          >
             <div className="text-4xl font-bold text-green-500 mb-2">{totalMastered}</div>
             <div className="text-gray-600">已掌握</div>
           </div>
-          <div className="card text-center">
+          <div 
+            className="card text-center cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={() => setSelectedCategory('learning')}
+          >
             <div className="text-4xl font-bold text-yellow-500 mb-2">{totalLearning}</div>
             <div className="text-gray-600">学习中</div>
           </div>
+          <div 
+            className="card text-center cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={() => setSelectedCategory('unlearned')}
+          >
+            <div className="text-4xl font-bold text-gray-500 mb-2">{totalNotLearned}</div>
+            <div className="text-gray-600">未学习</div>
+          </div>
         </div>
+
+        {selectedCategory !== null && (
+          <div className="card mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">
+                {selectedCategory === 'all' && '所有单词'}
+                {selectedCategory === 'mastered' && '已掌握单词'}
+                {selectedCategory === 'learning' && '学习中单词'}
+                {selectedCategory === 'unlearned' && '未学习单词'}
+              </h3>
+              <button 
+                className="text-gray-500 hover:text-gray-700"
+                onClick={() => setSelectedCategory(null)}
+              >
+                关闭
+              </button>
+            </div>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {filteredWords.map((word) => (
+                <div key={word.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <div className="font-medium text-gray-800">{word.word}</div>
+                    <div className="text-sm text-gray-500">{word.meaning}</div>
+                  </div>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    word.difficulty === 'easy' ? 'bg-green-100 text-green-700' :
+                    word.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    {word.difficulty === 'easy' ? '简单' : word.difficulty === 'medium' ? '中等' : '困难'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="card text-center">
           <div className="mb-6">
