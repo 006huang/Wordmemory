@@ -184,16 +184,16 @@ export const LibraryPage = () => {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left py-3 px-4 text-gray-600 font-medium">单词</th>
-                  <th className="text-left py-3 px-4 text-gray-600 font-medium">音标</th>
-                  <th className="text-left py-3 px-4 text-gray-600 font-medium">释义</th>
-                  <th className="text-left py-3 px-4 text-gray-600 font-medium">分类</th>
-                  <th className="text-left py-3 px-4 text-gray-600 font-medium">难度</th>
-                  <th className="text-right py-3 px-4 text-gray-600 font-medium">操作</th>
+                <tr className="border-b bg-gray-50">
+                  <th className="text-left py-3 px-4 text-gray-600 font-medium w-20">单词</th>
+                  <th className="text-left py-3 px-4 text-gray-600 font-medium w-32">音标</th>
+                  <th className="text-left py-3 px-4 text-gray-600 font-medium w-80">释义</th>
+                  <th className="text-left py-3 px-4 text-gray-600 font-medium w-20">分类</th>
+                  <th className="text-left py-3 px-4 text-gray-600 font-medium w-16">难度</th>
+                  <th className="text-right py-3 px-4 text-gray-600 font-medium w-16">操作</th>
                 </tr>
               </thead>
-              <tbody className="max-h-[500px] overflow-y-auto block">
+              <tbody>
                 {filteredWords.map((word) => (
                   <tr key={word.id} className="border-b hover:bg-gray-50">
                     <td className="py-3 px-4">
@@ -204,8 +204,8 @@ export const LibraryPage = () => {
                         </button>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-gray-500">{word.phonetic}</td>
-                    <td className="py-3 px-4 text-gray-700 max-w-xs truncate">{word.meaning}</td>
+                    <td className="py-3 px-4 text-gray-500 font-mono">{word.phonetic}</td>
+                    <td className="py-3 px-4 text-gray-700">{word.meaning}</td>
                     <td className="py-3 px-4">
                       <span className="px-2 py-1 bg-primary-100 text-primary-700 rounded text-sm">
                         {word.category}
