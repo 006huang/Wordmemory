@@ -96,6 +96,7 @@ export const api = {
   markWord: async (wordId: string, status: 'learning' | 'mastered'): Promise<void> => {
     try {
       await client.post('/learning-records', { wordId, status });
+      cache.delete('learningRecords');
     } catch {
       throw new Error('Failed to mark word');
     }
