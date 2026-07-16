@@ -150,6 +150,7 @@ export const HomePage = () => {
   const handleMarkMastered = async () => {
     if (currentWord) {
       await markWord(currentWord.id, 'mastered');
+      fetchLearningRecords();
       if (currentWordIndex >= sessionWords.length - 1) {
         setSessionWords([]);
       } else {
@@ -161,6 +162,7 @@ export const HomePage = () => {
   const handleMarkLearning = async () => {
     if (currentWord) {
       await markWord(currentWord.id, 'learning');
+      fetchLearningRecords();
       if (currentWordIndex >= sessionWords.length - 1) {
         setSessionWords([]);
       } else {
