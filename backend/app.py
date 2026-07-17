@@ -483,26 +483,15 @@ def get_daily_stats():
     stats = [dict(row) for row in cursor.fetchall()]
     conn.close()
     
-    if not stats:
-        today = datetime.now()
-        mock_stats = [
-            {"date": (today - timedelta(days=6)).strftime("%Y-%m-%d"), "words_learned": 8, "words_reviewed": 12, "accuracy": 82},
-            {"date": (today - timedelta(days=5)).strftime("%Y-%m-%d"), "words_learned": 10, "words_reviewed": 15, "accuracy": 85},
-            {"date": (today - timedelta(days=4)).strftime("%Y-%m-%d"), "words_learned": 12, "words_reviewed": 18, "accuracy": 90},
-            {"date": (today - timedelta(days=3)).strftime("%Y-%m-%d"), "words_learned": 8, "words_reviewed": 20, "accuracy": 88},
-            {"date": (today - timedelta(days=2)).strftime("%Y-%m-%d"), "words_learned": 15, "words_reviewed": 12, "accuracy": 92},
-            {"date": (today - timedelta(days=1)).strftime("%Y-%m-%d"), "words_learned": 14, "words_reviewed": 18, "accuracy": 89},
-            {"date": today.strftime("%Y-%m-%d"), "words_learned": 11, "words_reviewed": 16, "accuracy": 87},
-        ]
-        return jsonify(mock_stats), 200
-    
     return jsonify(stats), 200
 
 @app.route('/api/stats/weekly', methods=['GET'])
 def get_weekly_stats():
+    user_id = get_current_user_id()
+    
     if use_supabase():
         try:
-            response = supabase.table('weekly_stats').select('*').execute()
+            response = supabase.table('weekly_stats').select('*').eq('user_id', user_id).execute()
             return jsonify(response.data), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -510,17 +499,9 @@ def get_weekly_stats():
     conn = get_sqlite_conn()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM weekly_stats')
+    cursor.execute('SELECT * FROM weekly_stats WHERE user_id = ?', (user_id,))
     stats = [dict(row) for row in cursor.fetchall()]
     conn.close()
-    
-    if not stats:
-        today = datetime.now()
-        week_number = today.isocalendar()[1]
-        mock_stats = [
-            {"date": f"{today.year}-W{week_number:02d}", "words_learned": 56, "words_reviewed": 81, "accuracy": 88},
-        ]
-        return jsonify(mock_stats), 200
     
     return jsonify(stats), 200
 
@@ -632,6 +613,90 @@ def login():
         }
     }), 200
 
+@app.route('/api/change-password', methods=['POST'])
+def change_password():
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({"error": "未授权"}), 401
+    
+    user_id = verify_token(token.split(' ')[1])
+    if not user_id:
+        return jsonify({"error": "无效的token"}), 401
+    
+    data = request.get_json()
+    old_password = data.get('oldPassword')
+    new_password = data.get('newPassword')
+    
+    if not old_password or not new_password:
+        return jsonify({"error": "密码不能为空"}), 400
+    
+    if len(new_password) < 6:
+        return jsonify({"error": "密码长度至少6位"}), 400
+    
+    if use_supabase():
+        try:
+            response = supabase.table('users').select('*').eq('id', user_id).execute()
+            if not response.data:
+                return jsonify({"error": "用户不存在"}), 404
+            
+            user = response.data[0]
+            if not bcrypt.checkpw(old_password.encode('utf-8'), user['password'].encode('utf-8')):
+                return jsonify({"error": "当前密码错误"}), 400
+            
+            hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            supabase.table('users').update({'password': hashed_password}).eq('id', user_id).execute()
+            return jsonify({"message": "密码修改成功"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    conn = get_sqlite_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM users WHERE id = ?', (user_id,))
+    user = cursor.fetchone()
+    
+    if not user or not bcrypt.checkpw(old_password.encode('utf-8'), user['password'].encode('utf-8')):
+        conn.close()
+        return jsonify({"error": "当前密码错误"}), 400
+    
+    hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    cursor.execute('UPDATE users SET password = ? WHERE id = ?', (hashed_password, user_id))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"message": "密码修改成功"}), 200
+
+@app.route('/api/clear-data', methods=['POST'])
+def clear_data():
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        return jsonify({"error": "未授权"}), 401
+    
+    user_id = verify_token(token.split(' ')[1])
+    if not user_id:
+        return jsonify({"error": "无效的token"}), 401
+    
+    if use_supabase():
+        try:
+            supabase.table('learning_records').delete().eq('user_id', user_id).execute()
+            supabase.table('daily_stats').delete().eq('user_id', user_id).execute()
+            supabase.table('weekly_stats').delete().eq('user_id', user_id).execute()
+            return jsonify({"message": "数据清除成功"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    
+    cursor.execute('DELETE FROM learning_records WHERE user_id = ?', (user_id,))
+    cursor.execute('DELETE FROM daily_stats WHERE user_id = ?', (user_id,))
+    cursor.execute('DELETE FROM weekly_stats WHERE user_id = ?', (user_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"message": "数据清除成功"}), 200
+
 def generate_token(user_id):
     payload = {
         'user_id': user_id,
@@ -657,9 +722,11 @@ def get_current_user_id():
 
 @app.route('/api/wordbooks', methods=['GET'])
 def get_wordbooks():
+    user_id = get_current_user_id()
+    
     if use_supabase():
         try:
-            response = supabase.table('wordbooks').select('*').execute()
+            response = supabase.table('wordbooks').select('*').eq('user_id', user_id).execute()
             return jsonify(response.data), 200
         except Exception as e:
             return jsonify([]), 200
@@ -667,16 +734,18 @@ def get_wordbooks():
     conn = get_sqlite_conn()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM wordbooks')
+    cursor.execute('SELECT * FROM wordbooks WHERE user_id = ?', (user_id,))
     wordbooks = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return jsonify(wordbooks), 200
 
 @app.route('/api/wordbooks', methods=['POST'])
 def create_wordbook():
+    user_id = get_current_user_id()
     data = request.get_json()
     wordbook = {
         'id': str(uuid.uuid4()),
+        'user_id': user_id,
         'name': data.get('name', 'Untitled'),
         'description': data.get('description', ''),
         'created_at': datetime.utcnow().isoformat() + 'Z'
@@ -692,9 +761,9 @@ def create_wordbook():
     conn = get_sqlite_conn()
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO wordbooks (id, name, description, created_at)
-        VALUES (?, ?, ?, ?)
-    ''', (wordbook['id'], wordbook['name'], wordbook['description'], wordbook['created_at']))
+        INSERT INTO wordbooks (id, user_id, name, description, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (wordbook['id'], wordbook['user_id'], wordbook['name'], wordbook['description'], wordbook['created_at']))
     conn.commit()
     conn.close()
     return jsonify(wordbook), 201
@@ -772,10 +841,12 @@ def remove_word_from_wordbook(id, word_id):
 
 @app.route('/api/wordbooks/<id>', methods=['DELETE'])
 def delete_wordbook(id):
+    user_id = get_current_user_id()
+    
     if use_supabase():
         try:
             supabase.table('wordbook_words').delete().eq('wordbook_id', id).execute()
-            supabase.table('wordbooks').delete().eq('id', id).execute()
+            supabase.table('wordbooks').delete().eq('id', id).eq('user_id', user_id).execute()
             return jsonify({"message": "Wordbook deleted"}), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -783,7 +854,7 @@ def delete_wordbook(id):
     conn = get_sqlite_conn()
     cursor = conn.cursor()
     cursor.execute('DELETE FROM wordbook_words WHERE wordbook_id = ?', (id,))
-    cursor.execute('DELETE FROM wordbooks WHERE id = ?', (id,))
+    cursor.execute('DELETE FROM wordbooks WHERE id = ? AND user_id = ?', (id, user_id))
     conn.commit()
     conn.close()
     return jsonify({"message": "Wordbook deleted"}), 200

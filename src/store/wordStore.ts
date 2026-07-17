@@ -26,6 +26,7 @@ interface WordStore {
   addWord: (word: Omit<Word, 'id' | 'createdAt'>) => Promise<void>;
   deleteWord: (wordId: string) => Promise<void>;
   resetStore: () => void;
+  clearLearningData: () => void;
 }
 
 export const useWordStore = create<WordStore>((set, get) => ({
@@ -159,6 +160,17 @@ export const useWordStore = create<WordStore>((set, get) => ({
       currentWordIndex: 0,
       isLearning: false,
       loading: false,
+    });
+  },
+
+  clearLearningData: () => {
+    set({
+      learningRecords: [],
+      dailyStats: [],
+      weeklyStats: [],
+      reviewWords: [],
+      currentWordIndex: 0,
+      isLearning: false,
     });
   },
 }));

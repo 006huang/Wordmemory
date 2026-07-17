@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, CheckCircle, XCircle, RotateCcw, Volume2, PartyPopper, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle, XCircle, RotateCcw, Volume2, PartyPopper, Sparkles, AlertCircle } from 'lucide-react';
 import { useWordStore } from '../store/wordStore';
 import { Word } from '../types';
+
+const isLoggedIn = () => {
+  return localStorage.getItem('token') !== null;
+};
 
 const Confetti = () => {
   const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dfe6e9'];
@@ -56,6 +60,7 @@ export const HomePage = () => {
   const [choices, setChoices] = useState<{ word: string; meaning: string; isCorrect: boolean }[]>([]);
   const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
   const [choiceResult, setChoiceResult] = useState<'correct' | 'wrong' | null>(null);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   useEffect(() => {
     fetchWords();
@@ -71,12 +76,13 @@ export const HomePage = () => {
         selectedWords = [...reviewWords].sort(() => Math.random() - 0.5).slice(0, 10);
       } else {
         const masteredIds = new Set(learningRecords.filter((r) => r.status === 'mastered').map((r) => r.wordId));
-        const availableWords = words.filter((w) => !masteredIds.has(w.id));
+        const learningIds = new Set(learningRecords.filter((r) => r.status === 'learning').map((r) => r.wordId));
+        const availableWords = words.filter((w) => !masteredIds.has(w.id) && !learningIds.has(w.id));
         
         const shuffled = [...availableWords].sort(() => Math.random() - 0.5);
-        selectedWords = shuffled.slice(0, 10).length > 0 
+        selectedWords = shuffled.length >= 10 
           ? shuffled.slice(0, 10) 
-          : [...words].sort(() => Math.random() - 0.5).slice(0, 10);
+          : [...shuffled, ...[...words].sort(() => Math.random() - 0.5).slice(0, 10 - shuffled.length)];
       }
       
       setSessionWords(selectedWords);
@@ -88,7 +94,7 @@ export const HomePage = () => {
         generateChoices(selectedWords[0]);
       }
     }
-  }, [isLearning, words, learningRecords, reviewWords, mode, studyMode]);
+  }, [isLearning, mode, studyMode]);
 
   const generateChoices = (currentWord: Word) => {
     const allWords = [...words, ...reviewWords];
@@ -218,6 +224,14 @@ export const HomePage = () => {
     }
   };
 
+  const handleCategoryClick = (category: 'all' | 'mastered' | 'learning' | 'unlearned' | 'review') => {
+    if (!isLoggedIn()) {
+      setShowLoginPrompt(true);
+      return;
+    }
+    setSelectedCategory(category);
+  };
+
   if (!isLearning) {
     return (
       <div className="max-w-4xl mx-auto">
@@ -229,35 +243,35 @@ export const HomePage = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
           <div 
             className="card text-center cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => setSelectedCategory('all')}
+            onClick={() => handleCategoryClick('all')}
           >
             <div className="text-4xl font-bold text-primary-500 mb-2">{words.length}</div>
             <div className="text-gray-600">总词数</div>
           </div>
           <div 
             className="card text-center cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => setSelectedCategory('mastered')}
+            onClick={() => handleCategoryClick('mastered')}
           >
             <div className="text-4xl font-bold text-green-500 mb-2">{totalMastered}</div>
             <div className="text-gray-600">已掌握</div>
           </div>
           <div 
             className="card text-center cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => setSelectedCategory('learning')}
+            onClick={() => handleCategoryClick('learning')}
           >
             <div className="text-4xl font-bold text-yellow-500 mb-2">{totalLearning}</div>
             <div className="text-gray-600">学习中</div>
           </div>
           <div 
             className="card text-center cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => setSelectedCategory('review')}
+            onClick={() => handleCategoryClick('review')}
           >
             <div className={`text-4xl font-bold mb-2 ${reviewWords.length > 0 ? 'text-orange-500' : 'text-gray-400'}`}>{reviewWords.length}</div>
             <div className="text-gray-600">待复习</div>
           </div>
           <div 
             className="card text-center cursor-pointer hover:shadow-lg transition-shadow"
-            onClick={() => setSelectedCategory('unlearned')}
+            onClick={() => handleCategoryClick('unlearned')}
           >
             <div className="text-4xl font-bold text-gray-500 mb-2">{totalNotLearned}</div>
             <div className="text-gray-600">未学习</div>
@@ -349,16 +363,65 @@ export const HomePage = () => {
           </div>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button className="btn-primary text-lg px-12 py-4" onClick={() => { setMode('learn'); handleStartLearning(); }}>
+            <button 
+              className="btn-primary text-lg px-12 py-4" 
+              onClick={() => {
+                if (!isLoggedIn()) {
+                  setShowLoginPrompt(true);
+                  return;
+                }
+                setMode('learn');
+                handleStartLearning();
+              }}
+            >
               开始学习
             </button>
             {reviewWords.length > 0 && (
-              <button className="btn-secondary text-lg px-12 py-4" onClick={() => { setMode('review'); handleStartLearning(); }}>
+              <button 
+                className="btn-secondary text-lg px-12 py-4" 
+                onClick={() => {
+                  if (!isLoggedIn()) {
+                    setShowLoginPrompt(true);
+                    return;
+                  }
+                  setMode('review');
+                  handleStartLearning();
+                }}
+              >
                 开始复习 ({reviewWords.length})
               </button>
             )}
           </div>
         </div>
+
+        {showLoginPrompt && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4 animate-bounce-in">
+              <div className="flex items-center gap-3 mb-4">
+                <AlertCircle className="w-6 h-6 text-orange-500" />
+                <h3 className="text-lg font-semibold text-gray-800">请先登录</h3>
+              </div>
+              <p className="text-gray-600 mb-6">登录后即可查看单词详情和学习记录</p>
+              <div className="flex justify-end gap-3">
+                <button 
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  onClick={() => setShowLoginPrompt(false)}
+                >
+                  取消
+                </button>
+                <button 
+                  className="btn-primary"
+                  onClick={() => {
+                    setShowLoginPrompt(false);
+                    window.location.href = '/auth';
+                  }}
+                >
+                  去登录
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -667,4 +730,4 @@ export const HomePage = () => {
       )}
     </div>
   );
-};
+}
