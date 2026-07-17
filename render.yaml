@@ -3,9 +3,13 @@ services:
     name: wordmemory-backend
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
     envVars:
-      - key: SUPABASE_URL
+      - key: SECRET_KEY
         sync: false
-      - key: SUPABASE_KEY
-        sync: false
+      - key: JWT_EXPIRY_HOURS
+        value: 24
+      - key: PORT
+        value: 5000
+    plan: starter
+    region: singapore
