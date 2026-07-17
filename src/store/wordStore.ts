@@ -25,6 +25,7 @@ interface WordStore {
   markWord: (wordId: string, status: 'learning' | 'mastered') => Promise<void>;
   addWord: (word: Omit<Word, 'id' | 'createdAt'>) => Promise<void>;
   deleteWord: (wordId: string) => Promise<void>;
+  resetStore: () => void;
 }
 
 export const useWordStore = create<WordStore>((set, get) => ({
@@ -146,5 +147,18 @@ export const useWordStore = create<WordStore>((set, get) => ({
     } catch (error) {
       console.error('Failed to delete word:', error);
     }
+  },
+
+  resetStore: () => {
+    set({
+      words: [],
+      learningRecords: [],
+      dailyStats: [],
+      weeklyStats: [],
+      reviewWords: [],
+      currentWordIndex: 0,
+      isLearning: false,
+      loading: false,
+    });
   },
 }));

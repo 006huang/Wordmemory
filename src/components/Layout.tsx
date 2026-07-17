@@ -1,12 +1,14 @@
 import { BookOpen, Library, BarChart3, Menu, X, User, LogOut, LogIn } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useWordStore } from '../store/wordStore';
 
 export const Layout = ({ children }: { children: React.ReactNode }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [user, setUser] = useState<{ id: string; username: string } | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const resetStore = useWordStore((state) => state.resetStore);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -24,6 +26,7 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    resetStore();
     setUser(null);
     navigate('/');
   };

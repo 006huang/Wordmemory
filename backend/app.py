@@ -50,6 +50,7 @@ def init_sqlite():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS learning_records (
             id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
             word_id TEXT,
             word TEXT NOT NULL,
             status TEXT DEFAULT 'new',
@@ -57,35 +58,44 @@ def init_sqlite():
             last_review_at TEXT,
             next_review_at TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (word_id) REFERENCES words(id)
+            FOREIGN KEY (word_id) REFERENCES words(id),
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     ''')
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS daily_stats (
             id TEXT PRIMARY KEY,
-            date TEXT UNIQUE NOT NULL,
+            user_id TEXT NOT NULL,
+            date TEXT NOT NULL,
             words_learned INTEGER DEFAULT 0,
             words_reviewed INTEGER DEFAULT 0,
             accuracy INTEGER DEFAULT 0,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            UNIQUE(user_id, date)
         )
     ''')
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS weekly_stats (
             id TEXT PRIMARY KEY,
-            date TEXT UNIQUE NOT NULL,
+            user_id TEXT NOT NULL,
+            date TEXT NOT NULL,
             words_learned INTEGER DEFAULT 0,
             words_reviewed INTEGER DEFAULT 0,
             accuracy INTEGER DEFAULT 0,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            UNIQUE(user_id, date)
         )
     ''')
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS wordbooks (
             id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
             name TEXT NOT NULL,
             description TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     ''')
     cursor.execute('''
@@ -242,9 +252,11 @@ def delete_word(word_id):
 
 @app.route('/api/learning-records', methods=['GET'])
 def get_learning_records():
+    user_id = get_current_user_id()
+    
     if use_supabase():
         try:
-            response = supabase.table('learning_records').select('*').execute()
+            response = supabase.table('learning_records').select('*').eq('user_id', user_id).execute()
             records = []
             for r in response.data:
                 records.append({
@@ -264,7 +276,7 @@ def get_learning_records():
     conn = get_sqlite_conn()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM learning_records')
+    cursor.execute('SELECT * FROM learning_records WHERE user_id = ?', (user_id,))
     records = []
     for row in cursor.fetchall():
         r = dict(row)
@@ -284,10 +296,11 @@ def get_learning_records():
 @app.route('/api/review-words', methods=['GET'])
 def get_review_words():
     now = datetime.utcnow().isoformat() + "Z"
+    user_id = get_current_user_id()
     
     if use_supabase():
         try:
-            response = supabase.table('learning_records').select('*').lt('next_review_at', now).execute()
+            response = supabase.table('learning_records').select('*').eq('user_id', user_id).lt('next_review_at', now).execute()
             word_ids = [r['word_id'] for r in response.data]
             if not word_ids:
                 return jsonify([]), 200
@@ -299,7 +312,7 @@ def get_review_words():
     conn = get_sqlite_conn()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute('SELECT word_id FROM learning_records WHERE next_review_at < ?', (now,))
+    cursor.execute('SELECT word_id FROM learning_records WHERE user_id = ? AND next_review_at < ?', (user_id, now))
     word_ids = [row['word_id'] for row in cursor.fetchall()]
     
     if not word_ids:
@@ -324,6 +337,7 @@ def get_next_review_interval(status: str, review_count: int) -> timedelta:
 @app.route('/api/learning-records', methods=['POST'])
 def create_learning_record():
     data = request.get_json()
+    user_id = get_current_user_id()
     
     if use_supabase():
         try:
@@ -331,7 +345,7 @@ def create_learning_record():
             if not word_response.data:
                 return jsonify({"error": "Word not found"}), 404
             
-            existing_response = supabase.table('learning_records').select('*').eq('word_id', data['wordId']).single().execute()
+            existing_response = supabase.table('learning_records').select('*').eq('user_id', user_id).eq('word_id', data['wordId']).single().execute()
             
             if existing_response.data:
                 review_count = existing_response.data.get('review_count', 0) + 1
@@ -342,7 +356,7 @@ def create_learning_record():
                     "last_review_at": datetime.utcnow().isoformat() + "Z",
                     "next_review_at": (datetime.utcnow() + next_review).isoformat() + "Z"
                 }
-                response = supabase.table('learning_records').update(record).eq('word_id', data['wordId']).execute()
+                response = supabase.table('learning_records').update(record).eq('user_id', user_id).eq('word_id', data['wordId']).execute()
                 r = response.data[0]
                 return jsonify({
                     'id': r['id'],
@@ -358,6 +372,7 @@ def create_learning_record():
                 next_review = get_next_review_interval(data['status'], 1)
                 record = {
                     "id": str(uuid.uuid4()),
+                    "user_id": user_id,
                     "word_id": data['wordId'],
                     "word": word_response.data['word'],
                     "status": data['status'],
@@ -391,7 +406,7 @@ def create_learning_record():
         conn.close()
         return jsonify({"error": "Word not found"}), 404
     
-    cursor.execute('SELECT * FROM learning_records WHERE word_id = ?', (data['wordId'],))
+    cursor.execute('SELECT * FROM learning_records WHERE user_id = ? AND word_id = ?', (user_id, data['wordId']))
     existing_record = cursor.fetchone()
     
     if existing_record:
@@ -400,12 +415,12 @@ def create_learning_record():
         cursor.execute('''
             UPDATE learning_records 
             SET status = ?, review_count = ?, last_review_at = ?, next_review_at = ?
-            WHERE word_id = ?
+            WHERE user_id = ? AND word_id = ?
         ''', (data['status'], review_count, datetime.utcnow().isoformat() + "Z", 
-              (datetime.utcnow() + next_review).isoformat() + "Z", data['wordId']))
+              (datetime.utcnow() + next_review).isoformat() + "Z", user_id, data['wordId']))
         conn.commit()
         
-        cursor.execute('SELECT * FROM learning_records WHERE word_id = ?', (data['wordId'],))
+        cursor.execute('SELECT * FROM learning_records WHERE user_id = ? AND word_id = ?', (user_id, data['wordId']))
         updated_record = cursor.fetchone()
         conn.close()
         r = dict(updated_record)
@@ -433,9 +448,9 @@ def create_learning_record():
         }
         
         cursor.execute('''
-            INSERT INTO learning_records (id, word_id, word, status, review_count, last_review_at, next_review_at, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (record['id'], record['word_id'], record['word'], record['status'], record['review_count'], 
+            INSERT INTO learning_records (id, user_id, word_id, word, status, review_count, last_review_at, next_review_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (record['id'], user_id, record['word_id'], record['word'], record['status'], record['review_count'], 
               record['last_review_at'], record['next_review_at'], record['created_at']))
         conn.commit()
         conn.close()
@@ -452,9 +467,11 @@ def create_learning_record():
 
 @app.route('/api/stats/daily', methods=['GET'])
 def get_daily_stats():
+    user_id = get_current_user_id()
+    
     if use_supabase():
         try:
-            response = supabase.table('daily_stats').select('*').execute()
+            response = supabase.table('daily_stats').select('*').eq('user_id', user_id).execute()
             return jsonify(response.data), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -462,7 +479,7 @@ def get_daily_stats():
     conn = get_sqlite_conn()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM daily_stats')
+    cursor.execute('SELECT * FROM daily_stats WHERE user_id = ?', (user_id,))
     stats = [dict(row) for row in cursor.fetchall()]
     conn.close()
     
@@ -631,6 +648,13 @@ def verify_token(token):
     except jwt.InvalidTokenError:
         return None
 
+def get_current_user_id():
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+        return verify_token(token)
+    return None
+
 @app.route('/api/wordbooks', methods=['GET'])
 def get_wordbooks():
     if use_supabase():
@@ -766,9 +790,11 @@ def delete_wordbook(id):
 
 @app.route('/api/achievements', methods=['GET'])
 def get_achievements():
+    user_id = get_current_user_id()
+    
     if use_supabase():
         try:
-            response = supabase.table('learning_records').select('*').execute()
+            response = supabase.table('learning_records').select('*').eq('user_id', user_id).execute()
             records = response.data
         except Exception:
             records = []
@@ -776,7 +802,7 @@ def get_achievements():
         conn = get_sqlite_conn()
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM learning_records')
+        cursor.execute('SELECT * FROM learning_records WHERE user_id = ?', (user_id,))
         records = [dict(row) for row in cursor.fetchall()]
         conn.close()
     
