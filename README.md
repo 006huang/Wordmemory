@@ -36,6 +36,8 @@
 - 🔐 **用户认证**：注册/登录，数据隔离，多设备同步
 - ✨ **动画效果**：卡片翻转、学习完成庆祝动画
 - 📱 **响应式设计**：支持桌面和移动端
+- ❤️ **收藏单词**：收藏重要单词，方便集中复习
+- 👤 **个人主页**：学习统计、成就系统、账户设置
 
 ## 项目结构
 
@@ -48,7 +50,9 @@ Wordmemory/
 │   │   ├── HomePage.tsx     # 学习页面
 │   │   ├── LibraryPage.tsx  # 词库页面
 │   │   ├── StatsPage.tsx    # 统计页面
-│   │   └── AuthPage.tsx     # 登录/注册页面
+│   │   ├── AuthPage.tsx     # 登录/注册页面
+│   │   ├── ProfilePage.tsx  # 个人主页
+│   │   └── FavoritesPage.tsx # 收藏页面
 │   ├── store/               # Zustand状态管理
 │   │   └── wordStore.ts
 │   ├── api/                 # API接口封装
@@ -126,8 +130,8 @@ python app.py
 
 | 方法 | 路径 | 描述 | 参数 |
 |------|------|------|------|
-| POST | `/api/auth/register` | 用户注册 | `username`, `password` |
-| POST | `/api/auth/login` | 用户登录 | `username`, `password` |
+| POST | `/api/register` | 用户注册 | `username`, `password` |
+| POST | `/api/login` | 用户登录 | `username`, `password` |
 
 ### 单词相关
 
@@ -169,6 +173,21 @@ python app.py
 | DELETE | `/api/wordbooks/:id` | 删除词书 | - |
 | POST | `/api/wordbooks/:id/words` | 添加单词到词书 | `wordId` |
 | DELETE | `/api/wordbooks/:id/words/:wordId` | 从词书移除单词 | - |
+
+### 收藏管理
+
+| 方法 | 路径 | 描述 | 参数 |
+|------|------|------|------|
+| GET | `/api/favorites` | 获取收藏列表 | - |
+| POST | `/api/favorites` | 添加收藏 | `word_id` |
+| DELETE | `/api/favorites/:word_id` | 取消收藏 | - |
+
+### 账户管理
+
+| 方法 | 路径 | 描述 | 参数 |
+|------|------|------|------|
+| POST | `/api/change-password` | 修改密码 | `current_password`, `new_password` |
+| POST | `/api/clear-data` | 清除学习数据 | - |
 
 ## 部署
 
