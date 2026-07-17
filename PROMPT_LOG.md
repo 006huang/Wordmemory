@@ -473,6 +473,191 @@ python app.py  # 首次运行会自动导入单词
 
 ---
 
+## Prompt 11: 实现未登录提示功能
+
+**Prompt内容：**
+```
+请实现未登录状态下的访问控制：
+1. 点击统计卡片（总词数/已掌握/学习中/待复习）时显示"请先登录"弹窗
+2. 点击"开始学习"/"开始复习"按钮时显示登录提示
+3. 点击"词库"和"统计"导航时显示登录提示
+4. 登录提示弹窗提供跳转登录页按钮
+
+修改文件：
+- src/pages/HomePage.tsx: 添加登录检查和弹窗
+- src/components/Layout.tsx: 添加导航登录检查
+```
+
+**AI返回输出：**
+```
+已实现未登录提示功能！
+
+修改内容：
+1. src/pages/HomePage.tsx:
+   - 添加 isLoggedIn() 检查函数
+   - 添加 showLoginPrompt 状态
+   - 修改 handleCategoryClick 添加登录检查
+   - 修改开始学习/复习按钮添加登录检查
+   - 添加登录提示弹窗组件
+
+2. src/components/Layout.tsx:
+   - 添加 isLoggedIn() 检查函数
+   - 添加 showLoginPrompt 状态
+   - 修改词库/统计导航按钮添加登录检查
+   - 添加登录提示弹窗组件
+
+现在未登录用户无法访问受保护的功能，会显示登录提示。
+```
+
+**对应功能/文件：**
+- 未登录访问控制
+- [src/pages/HomePage.tsx](file:///d:/Wordmemory/src/pages/HomePage.tsx) - 学习页面登录检查
+- [src/components/Layout.tsx](file:///d:/Wordmemory/src/components/Layout.tsx) - 导航登录检查
+
+---
+
+## Prompt 12: 实现收藏单词功能
+
+**Prompt内容：**
+```
+请实现收藏单词功能：
+1. 后端添加收藏表和API（get_favorites、add_favorite、delete_favorite）
+2. 词库页面每个单词添加收藏按钮（爱心图标）
+3. 收藏后爱心变红填充，取消收藏时弹出确认对话框
+4. 添加收藏页面展示所有收藏单词
+5. 更新导航和路由
+
+修改文件：
+- backend/app.py: 添加收藏表和API
+- src/api/wordApi.ts: 添加收藏API调用
+- src/pages/LibraryPage.tsx: 添加收藏按钮
+- src/pages/FavoritesPage.tsx: 新建收藏页面
+- src/App.tsx: 添加路由
+- src/components/Layout.tsx: 添加导航入口
+```
+
+**AI返回输出：**
+```
+已实现收藏单词功能！
+
+修改内容：
+1. backend/app.py:
+   - 添加 favorites 表（user_id, word_id）
+   - 添加 /api/favorites GET/POST/DELETE 接口
+
+2. src/api/wordApi.ts:
+   - 添加 getFavorites、addFavorite、deleteFavorite 方法
+
+3. src/pages/LibraryPage.tsx:
+   - 添加收藏按钮（爱心图标）
+   - 收藏后红色填充，未收藏灰色
+   - 添加收藏成功提示和取消收藏确认对话框
+
+4. src/pages/FavoritesPage.tsx (新建):
+   - 展示所有收藏单词
+   - 支持发音和取消收藏
+
+5. 路由和导航：
+   - 添加 /favorites 路由
+   - 导航栏添加收藏入口
+
+现在用户可以收藏重要单词，方便集中复习！
+```
+
+**对应功能/文件：**
+- 收藏单词功能
+- [backend/app.py](file:///d:/Wordmemory/backend/app.py) - 收藏API
+- [src/pages/LibraryPage.tsx](file:///d:/Wordmemory/src/pages/LibraryPage.tsx) - 收藏按钮
+- [src/pages/FavoritesPage.tsx](file:///d:/Wordmemory/src/pages/FavoritesPage.tsx) - 收藏页面
+
+---
+
+## Prompt 13: 实现个人主页功能
+
+**Prompt内容：**
+```
+请实现个人主页功能：
+1. 学习统计（总体进度条、连续学习天数、累计学习天数、最近学习记录）
+2. 成就系统（成就徽章展示、进度条）
+3. 账户设置（修改密码、清除学习数据、关于信息）
+4. 点击用户名进入个人主页
+
+修改文件：
+- backend/app.py: 添加修改密码和清除数据API
+- src/pages/ProfilePage.tsx: 新建个人主页
+- src/api/wordApi.ts: 添加修改密码API
+- src/components/Layout.tsx: 添加个人主页入口
+```
+
+**AI返回输出：**
+```
+已实现个人主页功能！
+
+修改内容：
+1. backend/app.py:
+   - 添加 /api/change-password 修改密码接口
+   - 添加 /api/clear-data 清除学习数据接口
+
+2. src/pages/ProfilePage.tsx (新建):
+   - 学习统计卡片和进度条
+   - 成就徽章展示（初学者、词汇收藏家、词汇大师等）
+   - 修改密码表单（当前密码验证）
+   - 清除学习数据按钮（确认对话框）
+   - 关于信息
+
+3. src/api/wordApi.ts:
+   - 添加 changePassword 方法
+
+4. src/components/Layout.tsx:
+   - 点击用户名跳转个人主页
+   - 移动端菜单添加个人主页入口
+
+现在用户可以查看学习统计和成就，管理账户！
+```
+
+**对应功能/文件：**
+- 个人主页功能
+- [backend/app.py](file:///d:/Wordmemory/backend/app.py) - 账户API
+- [src/pages/ProfilePage.tsx](file:///d:/Wordmemory/src/pages/ProfilePage.tsx) - 个人主页
+
+---
+
+## Prompt 14: 优化清除数据体验
+
+**Prompt内容：**
+```
+优化清除学习数据功能：
+1. 清除数据后立即同步更新UI，不需要手动刷新
+2. 使用状态管理直接更新，而不是页面刷新
+
+修改文件：
+- src/store/wordStore.ts: 添加 clearLearningData 方法
+- src/pages/ProfilePage.tsx: 更新清除数据逻辑
+```
+
+**AI返回输出：**
+```
+已优化清除数据体验！
+
+修改内容：
+1. src/store/wordStore.ts:
+   - 添加 clearLearningData 方法，清除学习记录、统计数据、复习单词
+
+2. src/pages/ProfilePage.tsx:
+   - 使用新的 clearLearningData 方法
+   - 清除后直接更新状态，不再需要手动刷新
+   - 移除 alert 和 window.location.reload()
+
+现在清除学习数据后页面会立即更新为空白状态！
+```
+
+**对应功能/文件：**
+- 清除数据体验优化
+- [src/store/wordStore.ts](file:///d:/Wordmemory/src/store/wordStore.ts) - 状态管理
+- [src/pages/ProfilePage.tsx](file:///d:/Wordmemory/src/pages/ProfilePage.tsx) - 清除数据逻辑
+
+---
+
 ## 总结
 
 | 序号 | Prompt主题 | 对应功能 | 涉及文件 |
@@ -487,3 +672,7 @@ python app.py  # 首次运行会自动导入单词
 | 8 | 动画效果 | 卡片翻转/庆祝 | HomePage.tsx, index.css |
 | 9 | 词书功能 | 自定义词书 | app.py, LibraryPage.tsx |
 | 10 | 交互优化 | 选择题/听音反馈 | HomePage.tsx |
+| 11 | 未登录提示 | 访问控制 | HomePage.tsx, Layout.tsx |
+| 12 | 收藏单词 | 单词收藏功能 | app.py, LibraryPage.tsx, FavoritesPage.tsx |
+| 13 | 个人主页 | 用户中心 | app.py, ProfilePage.tsx |
+| 14 | 清除数据优化 | UI即时更新 | wordStore.ts, ProfilePage.tsx |
