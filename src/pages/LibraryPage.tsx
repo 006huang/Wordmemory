@@ -350,9 +350,8 @@ export const LibraryPage = () => {
               </button>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <div className="flex-1">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+                <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">单词</label>
                   <input
                     type="text"
@@ -362,7 +361,7 @@ export const LibraryPage = () => {
                     placeholder="单词"
                   />
                 </div>
-                <div className="flex-1">
+                <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">音标</label>
                   <input
                     type="text"
@@ -372,7 +371,7 @@ export const LibraryPage = () => {
                     placeholder="音标"
                   />
                 </div>
-                <div className="flex-1">
+                <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">分类</label>
                   <select
                     className="input-field text-sm"
@@ -384,7 +383,7 @@ export const LibraryPage = () => {
                     ))}
                   </select>
                 </div>
-                <div className="w-24">
+                <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">难度</label>
                   <select
                     className="input-field text-sm"
@@ -396,27 +395,26 @@ export const LibraryPage = () => {
                     <option value="hard">困难</option>
                   </select>
                 </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">释义</label>
-                <input
-                  type="text"
-                  className="input-field text-sm"
-                  value={newWord.meaning}
-                  onChange={(e) => setNewWord({ ...newWord, meaning: e.target.value })}
-                  placeholder="输入释义"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">例句</label>
-                <input
-                  type="text"
-                  className="input-field text-sm"
-                  value={newWord.example}
-                  onChange={(e) => setNewWord({ ...newWord, example: e.target.value })}
-                  placeholder="输入例句"
-                />
-              </div>
+                <div className="md:col-span-3">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">释义</label>
+                  <input
+                    type="text"
+                    className="input-field text-sm"
+                    value={newWord.meaning}
+                    onChange={(e) => setNewWord({ ...newWord, meaning: e.target.value })}
+                    placeholder="输入释义"
+                  />
+                </div>
+                <div className="md:col-span-3">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">例句</label>
+                  <input
+                    type="text"
+                    className="input-field text-sm"
+                    value={newWord.example}
+                    onChange={(e) => setNewWord({ ...newWord, example: e.target.value })}
+                    placeholder="输入例句"
+                  />
+                </div>
             </div>
 
             <div className="flex gap-4 mt-6">
