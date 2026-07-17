@@ -1,4 +1,4 @@
-import unittest
+import pytest
 import sys
 import os
 
@@ -6,74 +6,121 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import app
 
-class TestAPI(unittest.TestCase):
-    def setUp(self):
-        app.config['TESTING'] = True
-        self.client = app.test_client()
+@pytest.fixture
+def client():
+    app.config['TESTING'] = True
+    with app.test_client() as client:
+        yield client
 
-    def test_get_words(self):
-        response = self.client.get('/api/words')
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertIsInstance(data, list)
-        self.assertGreater(len(data), 0)
+def test_get_words(client):
+    response = client.get('/api/words')
+    assert response.status_code == 200
+    data = response.get_json()
+    assert isinstance(data, list)
+    assert len(data) > 0
 
-    def test_get_word(self):
-        response = self.client.get('/api/words/1')
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertEqual(data['word'], 'abandon')
+def test_get_word(client):
+    response = client.get('/api/words/1')
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['word'] == 'abandon'
 
-    def test_get_word_not_found(self):
-        response = self.client.get('/api/words/nonexistent')
-        self.assertEqual(response.status_code, 404)
+def test_get_word_not_found(client):
+    response = client.get('/api/words/nonexistent')
+    assert response.status_code == 404
 
-    def test_create_word(self):
-        new_word = {
-            'word': 'testword',
-            'phonetic': '/test/',
-            'meaning': 'v. 测试',
-            'example': 'This is a test.',
-            'category': 'CET-4',
-            'difficulty': 'easy'
-        }
-        response = self.client.post('/api/words', json=new_word)
-        self.assertEqual(response.status_code, 201)
-        data = response.get_json()
-        self.assertEqual(data['word'], 'testword')
+def test_create_word(client):
+    new_word = {
+        'word': 'testword',
+        'phonetic': '/test/',
+        'meaning': 'v. 测试',
+        'example': 'This is a test.',
+        'category': 'CET-4',
+        'difficulty': 'easy'
+    }
+    response = client.post('/api/words', json=new_word)
+    assert response.status_code == 201
+    data = response.get_json()
+    assert data['word'] == 'testword'
 
-    def test_delete_word(self):
-        new_word = {
-            'word': 'tempword',
-            'phonetic': '/temp/',
-            'meaning': 'v. 临时',
-            'example': 'Temporary word.',
-            'category': 'CET-4',
-            'difficulty': 'easy'
-        }
-        create_response = self.client.post('/api/words', json=new_word)
-        word_id = create_response.get_json()['id']
-        
-        delete_response = self.client.delete(f'/api/words/{word_id}')
-        self.assertEqual(delete_response.status_code, 200)
+def test_delete_word(client):
+    new_word = {
+        'word': 'tempword',
+        'phonetic': '/temp/',
+        'meaning': 'v. 临时',
+        'example': 'Temporary word.',
+        'category': 'CET-4',
+        'difficulty': 'easy'
+    }
+    create_response = client.post('/api/words', json=new_word)
+    word_id = create_response.get_json()['id']
+    
+    delete_response = client.delete(f'/api/words/{word_id}')
+    assert delete_response.status_code == 200
 
-    def test_get_learning_records(self):
-        response = self.client.get('/api/learning-records')
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertIsInstance(data, list)
+def test_get_learning_records(client):
+    response = client.get('/api/learning-records')
+    assert response.status_code == 200
+    data = response.get_json()
+    assert isinstance(data, list)
 
-    def test_get_daily_stats(self):
-        response = self.client.get('/api/stats/daily')
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertIsInstance(data, list)
+def test_get_daily_stats(client):
+    response = client.get('/api/stats/daily')
+    assert response.status_code == 200
+    data = response.get_json()
+    assert isinstance(data, list)
 
-    def test_get_weekly_stats(self):
-        response = self.client.get('/api/stats/weekly')
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertIsInstance(data, list)
+def test_get_weekly_stats(client):
+    response = client.get('/api/stats/weekly')
+    assert response.status_code == 200
+    data = response.get_json()
+    assert isinstance(data, list)
 
-if __name__ == '__main__':
-    unittest.main()
+def test_register(client):
+    import uuid
+    unique_username = f'testuser_{uuid.uuid4().hex[:8]}'
+    response = client.post('/api/register', json={
+        'username': unique_username,
+        'password': 'testpassword123'
+    })
+    assert response.status_code == 201 or response.status_code == 200
+
+def test_login(client):
+    import uuid
+    unique_username = f'testuser_login_{uuid.uuid4().hex[:8]}'
+    client.post('/api/register', json={
+        'username': unique_username,
+        'password': 'password123'
+    })
+    response = client.post('/api/login', json={
+        'username': unique_username,
+        'password': 'password123'
+    })
+    assert response.status_code == 200
+    data = response.get_json()
+    assert 'token' in data
+
+def test_get_wordbooks(client):
+    response = client.get('/api/wordbooks')
+    assert response.status_code == 200
+    data = response.get_json()
+    assert isinstance(data, list)
+
+def test_get_favorites(client):
+    response = client.get('/api/favorites')
+    assert response.status_code == 200
+    data = response.get_json()
+    assert isinstance(data, list)
+
+def test_get_stats_overview(client):
+    response = client.get('/api/stats/daily')
+    assert response.status_code == 200
+    data = response.get_json()
+    assert isinstance(data, list)
+
+def test_get_achievements(client):
+    response = client.get('/api/achievements')
+    assert response.status_code == 200
+    data = response.get_json()
+    assert 'achievements' in data
+    assert isinstance(data['achievements'], list)

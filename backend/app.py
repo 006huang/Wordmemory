@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
+import logging
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import uuid
@@ -14,9 +15,23 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('backend.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 SECRET_KEY = os.getenv('SECRET_KEY', 'wordmemory_secret_key')
+JWT_EXPIRY_HOURS = int(os.getenv('JWT_EXPIRY_HOURS', '24'))
+DEBUG = os.getenv('DEBUG', 'false').lower() == 'true'
+PORT = int(os.getenv('PORT', '5174'))
 
 supabase: Client = None
 if SUPABASE_URL and SUPABASE_KEY:
@@ -819,7 +834,7 @@ def delete_favorite(word_id):
 def generate_token(user_id):
     payload = {
         'user_id': user_id,
-        'exp': datetime.utcnow() + timedelta(days=7)
+        'exp': datetime.utcnow() + timedelta(hours=JWT_EXPIRY_HOURS)
     }
     return jwt.encode(payload, SECRET_KEY, algorithm='HS256')
 
@@ -1043,4 +1058,7 @@ def get_achievements():
     }), 200
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    logger.info(f'Starting Wordmemory API server on port {PORT}')
+    logger.info(f'Debug mode: {DEBUG}')
+    logger.info(f'Using SQLite database: {DB_PATH}')
+    app.run(host='0.0.0.0', port=PORT, debug=DEBUG)

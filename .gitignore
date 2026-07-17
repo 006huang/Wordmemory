@@ -18,3 +18,4 @@ backend/.venv
 *~
 .DS_Store
 *.db
+*.log
