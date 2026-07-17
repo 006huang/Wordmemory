@@ -5,6 +5,7 @@ import { LibraryPage } from './pages/LibraryPage';
 import { StatsPage } from './pages/StatsPage';
 import { AuthPage } from './pages/AuthPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { FavoritesPage } from './pages/FavoritesPage';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/stats" element={<StatsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/favorites" element={<FavoritesPage />} />
           </Routes>
         </Layout>
       } />

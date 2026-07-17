@@ -76,6 +76,17 @@ def init_sqlite():
         )
     ''')
     cursor.execute('''
+        CREATE TABLE IF NOT EXISTS favorites (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            word_id TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (word_id) REFERENCES words(id),
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            UNIQUE(user_id, word_id)
+        )
+    ''')
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS weekly_stats (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -696,6 +707,114 @@ def clear_data():
     conn.close()
     
     return jsonify({"message": "数据清除成功"}), 200
+
+@app.route('/api/favorites', methods=['GET'])
+def get_favorites():
+    user_id = get_current_user_id()
+    if not user_id:
+        return jsonify([]), 200
+    
+    if use_supabase():
+        try:
+            response = supabase.table('favorites').select('*').eq('user_id', user_id).execute()
+            favorite_ids = [f['word_id'] for f in response.data]
+            words_response = supabase.table('words').select('*').in_('id', favorite_ids).execute()
+            return jsonify(words_response.data), 200
+        except Exception as e:
+            return jsonify([]), 200
+    
+    conn = get_sqlite_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT word_id FROM favorites WHERE user_id = ?', (user_id,))
+    favorite_ids = [row['word_id'] for row in cursor.fetchall()]
+    
+    if not favorite_ids:
+        conn.close()
+        return jsonify([]), 200
+    
+    placeholders = ','.join('?' * len(favorite_ids))
+    cursor.execute(f'SELECT * FROM words WHERE id IN ({placeholders})', favorite_ids)
+    words = [dict(row) for row in cursor.fetchall()]
+    
+    conn.close()
+    return jsonify(words), 200
+
+@app.route('/api/favorites', methods=['POST'])
+def add_favorite():
+    user_id = get_current_user_id()
+    if not user_id:
+        return jsonify({"error": "未授权"}), 401
+    
+    data = request.get_json()
+    word_id = data.get('word_id')
+    
+    if not word_id:
+        return jsonify({"error": "单词ID不能为空"}), 400
+    
+    if use_supabase():
+        try:
+            response = supabase.table('words').select('*').eq('id', word_id).execute()
+            if not response.data:
+                return jsonify({"error": "单词不存在"}), 404
+            
+            favorite = {
+                'id': str(uuid.uuid4()),
+                'user_id': user_id,
+                'word_id': word_id,
+                'created_at': datetime.utcnow().isoformat() + 'Z'
+            }
+            supabase.table('favorites').insert(favorite).execute()
+            return jsonify(response.data[0]), 201
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    conn = get_sqlite_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM words WHERE id = ?', (word_id,))
+    word = cursor.fetchone()
+    
+    if not word:
+        conn.close()
+        return jsonify({"error": "单词不存在"}), 404
+    
+    try:
+        cursor.execute('''
+            INSERT INTO favorites (id, user_id, word_id, created_at)
+            VALUES (?, ?, ?, ?)
+        ''', (str(uuid.uuid4()), user_id, word_id, datetime.utcnow().isoformat()))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"error": "已收藏"}), 400
+    
+    conn.close()
+    return jsonify(dict(word)), 201
+
+@app.route('/api/favorites/<word_id>', methods=['DELETE'])
+def delete_favorite(word_id):
+    user_id = get_current_user_id()
+    if not user_id:
+        return jsonify({"error": "未授权"}), 401
+    
+    if use_supabase():
+        try:
+            supabase.table('favorites').delete().eq('user_id', user_id).eq('word_id', word_id).execute()
+            return jsonify({"message": "取消收藏成功"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    
+    cursor.execute('DELETE FROM favorites WHERE user_id = ? AND word_id = ?', (user_id, word_id))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"message": "取消收藏成功"}), 200
 
 def generate_token(user_id):
     payload = {

@@ -1,4 +1,4 @@
-import { BookOpen, Library, BarChart3, Menu, X, User, LogOut, LogIn, AlertCircle } from 'lucide-react';
+import { BookOpen, Library, BarChart3, Menu, X, User, LogOut, LogIn, AlertCircle, Heart } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useWordStore } from '../store/wordStore';
@@ -25,6 +25,7 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
   const navItems = [
     { path: '/', icon: BookOpen, label: '学习' },
     { path: '/library', icon: Library, label: '词库' },
+    { path: '/favorites', icon: Heart, label: '收藏' },
     { path: '/stats', icon: BarChart3, label: '统计' },
   ];
 

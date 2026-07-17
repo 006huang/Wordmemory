@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, Plus, Trash2, Volume2, X, BookOpen, BookMarked, ChevronRight } from 'lucide-react';
+import { Search, Plus, Trash2, Volume2, X, BookOpen, BookMarked, ChevronRight, Heart } from 'lucide-react';
 import { useWordStore } from '../store/wordStore';
 import { Word } from '../types';
 import { categories } from '../data/mockWords';
@@ -34,11 +34,40 @@ export const LibraryPage = () => {
   const [wordbookWords, setWordbookWords] = useState<Word[]>([]);
   const [showWordbookModal, setShowWordbookModal] = useState(false);
   const [newWordbook, setNewWordbook] = useState({ name: '', description: '' });
+  const [favorites, setFavorites] = useState<Word[]>([]);
 
   useEffect(() => {
     fetchWords();
     fetchWordbooks();
-  }, [fetchWords]);
+    fetchFavorites();
+  }, []);
+
+  const fetchFavorites = async () => {
+    const data = await api.getFavorites();
+    setFavorites(data);
+  };
+
+  const handleToggleFavorite = async (wordId: string) => {
+    const isCurrentlyFavorited = favorites.some((f) => f.id === wordId);
+    
+    if (isCurrentlyFavorited) {
+      if (!window.confirm('确定要取消收藏这个单词吗？')) {
+        return;
+      }
+      await api.deleteFavorite(wordId);
+      setFavorites((prev) => prev.filter((f) => f.id !== wordId));
+    } else {
+      const result = await api.addFavorite(wordId);
+      if (result) {
+        setFavorites((prev) => [...prev, result]);
+        alert('收藏成功！');
+      }
+    }
+  };
+
+  const isFavorited = (wordId: string) => {
+    return favorites.some((f) => f.id === wordId);
+  };
 
   const fetchWordbooks = async () => {
     const data = await api.getWordbooks();
@@ -222,7 +251,17 @@ export const LibraryPage = () => {
                     </td>
                     <td className="py-3 px-4 text-right">
                       <button
-                        className="p-2 hover:bg-red-100 rounded-lg text-red-500"
+                        className={`p-2 rounded-lg transition-colors ${
+                          isFavorited(word.id) 
+                            ? 'text-red-500 bg-red-50 hover:bg-red-100' 
+                            : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
+                        }`}
+                        onClick={() => handleToggleFavorite(word.id)}
+                      >
+                        <Heart className={`w-4 h-4 ${isFavorited(word.id) ? 'fill-current' : ''}`} />
+                      </button>
+                      <button
+                        className="p-2 hover:bg-red-100 rounded-lg text-red-500 ml-1"
                         onClick={() => handleDeleteWord(word.id)}
                       >
                         <Trash2 className="w-4 h-4" />

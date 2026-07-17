@@ -210,4 +210,44 @@ export const api = {
     const response = await client.post('/register', { username, password });
     return response.data;
   },
+
+  getFavorites: async (): Promise<Word[]> => {
+    try {
+      const response = await client.get('/favorites');
+      const data = response.data as any[];
+      return data.map((item) => {
+        if (item.created_at) {
+          item.createdAt = item.created_at;
+        }
+        return item;
+      });
+    } catch {
+      return [];
+    }
+  },
+
+  addFavorite: async (wordId: string): Promise<Word | null> => {
+    try {
+      const response = await client.post('/favorites', { word_id: wordId });
+      const data = response.data;
+      if (data && data.created_at) {
+        data.createdAt = data.created_at;
+      }
+      return data;
+    } catch (error) {
+      const axiosError = error as { response?: { data?: { error?: string } } };
+      if (axiosError.response?.data?.error === '已收藏') {
+        return null;
+      }
+      return null;
+    }
+  },
+
+  deleteFavorite: async (wordId: string): Promise<void> => {
+    try {
+      await client.delete(`/favorites/${wordId}`);
+    } catch {
+      throw new Error('Failed to remove favorite');
+    }
+  },
 };
