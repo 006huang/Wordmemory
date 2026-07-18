@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { Word, LearningRecord, DailyStats } from '../types';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const BASE_URL = 'http://127.0.0.1:5174/api';
 
 const client = axios.create({
   baseURL: BASE_URL,
