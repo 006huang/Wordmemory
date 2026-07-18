@@ -24,8 +24,8 @@
 - Supabase (云数据库，可选)
 
 ### 部署
-- Vercel (前端)
-- Render (后端)
+- Netlify (前端)
+- 本地运行 (后端)
 
 ## 功能特性
 
@@ -191,21 +191,23 @@ python app.py
 
 ## 部署
 
-### 前端部署到Vercel
+### 前端部署到 Netlify
 
-1. 登录 Vercel 官网
-2. 导入你的 GitHub 仓库
-3. 配置构建命令：`npm run build`
-4. 配置环境变量 `VITE_API_URL`
+1. 在项目根目录执行 `npm run build`，生成 `dist` 文件夹
+2. 登录 Netlify 官网（app.netlify.com）
+3. 将 `dist` 文件夹拖拽到 Netlify Drop 区域
+4. 部署完成后，Netlify 会生成一个 `项目名.netlify.app` 的访问链接
+5. 注册 Netlify 账号后，该链接永久有效
 
-### 后端部署到Render
+**前端线上地址**：`https://tubular-cucurucho-072871.netlify.app`
 
-1. 登录 Render 官网
-2. 创建新的 Web Service
-3. 导入你的 GitHub 仓库
-4. 配置构建命令：`pip install -r requirements.txt`
-5. 配置启动命令：`python app.py`
-6. 配置环境变量
+### 后端部署（本地运行）
+
+后端服务基于 Python Flask，如需本地运行：
+```bash
+cd backend
+pip install -r requirements.txt
+python app.py ```
 
 ## 学习模式说明
 
@@ -228,5 +230,5 @@ MIT License
 ## 项目链接
 
 - GitHub: https://github.com/006huang/Wordmemory
-- 前端部署: 待部署
-- 后端部署: 待部署
+- 前端部署: https://tubular-cucurucho-072871.netlify.app
+- 后端部署: 本地运行（`cd backend && python app.py`）
