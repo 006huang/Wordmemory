@@ -39,18 +39,6 @@
 - ❤️ **收藏单词**：收藏重要单词，方便集中复习
 - 👤 **个人主页**：学习统计、成就系统、账户设置
 
-## 🎬 项目演示
-
-[![项目演示视频](https://img.shields.io/badge/📺%20项目演示-点击观看-blue)](https://space.bilibili.com/your-video-link)
-
-**演示内容**：
-- 用户注册/登录
-- 学习模式切换（普通模式、拼写测试、选择题、听音辨词）
-- 词库管理（添加、删除、搜索单词）
-- 学习统计查看
-- 个人主页功能
-- 收藏和词书功能
-
 ## 项目结构
 
 ```
@@ -272,4 +260,4 @@ MIT License
 
 - GitHub: https://github.com/006huang/Wordmemory
 - 前端部署: https://tubular-cucurucho-072871.netlify.app
-- 后端部署: 需部署到 Render（配置文件已准备好）
+- 后端部署: 本地运行
