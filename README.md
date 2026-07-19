@@ -43,38 +43,35 @@
 
 ```
 Wordmemory/
-├── src/
+├── src/                     # 前端代码
 │   ├── components/          # 通用组件
-│   │   └── Layout.tsx       # 页面布局组件
 │   ├── pages/               # 页面组件
-│   │   ├── HomePage.tsx     # 学习页面
-│   │   ├── LibraryPage.tsx  # 词库页面
-│   │   ├── StatsPage.tsx    # 统计页面
-│   │   ├── AuthPage.tsx     # 登录/注册页面
-│   │   ├── ProfilePage.tsx  # 个人主页
-│   │   └── FavoritesPage.tsx # 收藏页面
 │   ├── store/               # Zustand状态管理
-│   │   └── wordStore.ts
 │   ├── api/                 # API接口封装
-│   │   └── wordApi.ts
 │   ├── types/               # TypeScript类型定义
-│   │   └── index.ts
 │   ├── App.tsx              # 应用入口
 │   ├── main.tsx             # React入口
 │   └── index.css            # 全局样式
 ├── backend/                 # 后端服务
 │   ├── app.py               # Flask应用主文件
-│   ├── generate_words.py    # 单词数据生成脚本
 │   ├── requirements.txt     # 依赖列表
-│   ├── wordmemory.db        # SQLite数据库文件
-│   └── .env.example         # 环境变量示例
+│   └── tests/               # 后端测试
+├── 截图/                    # 接口测试截图
+├── README.md                # 项目说明文档
+├── PROMPT_LOG.md            # AI提示词日志
+├── API接口文档.md            # 完整API接口文档
+├── 代码审查报告.md           # AI代码审查报告
+├── 部署指南.md               # 项目部署指南
+├── 开发日志.md               # 项目开发日志
+├── 个人总结报告.md           # 实训个人总结报告
+├── 数据库表结构.sql          # 数据库建表语句
 ├── index.html               # HTML模板
 ├── package.json             # 前端依赖
 ├── tsconfig.json            # TypeScript配置
 ├── vite.config.ts           # Vite配置
 ├── tailwind.config.js       # TailwindCSS配置
 ├── postcss.config.js        # PostCSS配置
-└── README.md                # 项目说明文档
+└── render.yaml              # Render部署配置
 ```
 
 ## 快速开始
@@ -246,9 +243,21 @@ docker run -p 5174:5174 wordmemory-backend
 
 MIT License
 
+## 项目文档
+
+| 文档名称 | 说明 |
+|---------|------|
+| README.md | 项目说明文档 |
+| PROMPT_LOG.md | AI提示词日志（记录开发过程中使用的关键Prompt） |
+| API接口文档.md | 完整的API接口文档 |
+| 代码审查报告.md | AI代码审查报告 |
+| 部署指南.md | 项目部署指南 |
+| 开发日志.md | 项目开发日志 |
+| 个人总结报告.md | 实训个人总结报告 |
+| 数据库表结构.sql | 数据库建表语句 |
+
 ## 项目链接
 
 - GitHub: https://github.com/006huang/Wordmemory
 - 前端部署: https://tubular-cucurucho-072871.netlify.app
 - 后端部署: 需部署到 Render（配置文件已准备好）
-- API文档: docs/API_DOC.md
