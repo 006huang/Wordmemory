@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Eye, EyeOff, LogIn, UserPlus, ArrowLeft } from 'lucide-react';
 import { api } from '../api/wordApi';
 import { useNavigate } from 'react-router-dom';
+import { useWordStore } from '../store/wordStore';
 
 export const AuthPage = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -11,6 +12,7 @@ export const AuthPage = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { resetStore } = useWordStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,6 +29,8 @@ export const AuthPage = () => {
         localStorage.setItem('token', response.token);
         localStorage.setItem('user', JSON.stringify(response.user));
       }
+      resetStore();
+      api.clearCache();
       navigate('/');
     } catch (err: any) {
       setError(err.message || '操作失败');

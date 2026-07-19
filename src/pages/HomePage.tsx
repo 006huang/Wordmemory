@@ -38,13 +38,93 @@ const Confetti = () => {
   );
 };
 
-const speakWord = (word: string) => {
+let cachedVoices: SpeechSynthesisVoice[] = [];
+
+const initVoiceCache = () => {
   if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      cachedVoices = voices;
+      console.log('Voices cached on load:', voices.length);
+    }
+    
+    window.speechSynthesis.onvoiceschanged = () => {
+      cachedVoices = window.speechSynthesis.getVoices();
+      console.log('Voices updated:', cachedVoices.length);
+    };
+  }
+};
+
+initVoiceCache();
+
+const speakWord = (word: string) => {
+  if (!('speechSynthesis' in window)) {
+    alert('您的浏览器不支持语音合成功能');
+    return;
+  }
+  
+  const voices = cachedVoices.length > 0 ? cachedVoices : window.speechSynthesis.getVoices();
+  
+  if (voices.length === 0) {
+    alert('系统没有可用的语音，请检查浏览器语音设置');
+    return;
+  }
+  
+  speakWithVoice(word, voices);
+};
+
+const speakWithVoice = (word: string, voices: SpeechSynthesisVoice[]) => {
+  console.log('Speaking word:', word);
+  console.log('Available voices:', voices.length);
+  
+  const englishVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('English')) ||
+                       voices.find(v => v.lang.startsWith('en')) ||
+                       voices.find(v => v.lang.startsWith('en-US'));
+  
+  if (englishVoice) {
     const utterance = new SpeechSynthesisUtterance(word);
     utterance.lang = 'en-US';
     utterance.rate = 0.8;
-    window.speechSynthesis.speak(utterance);
+    utterance.voice = englishVoice;
+    console.log('Using voice:', englishVoice.name, englishVoice.lang);
+    
+    utterance.onerror = (event) => {
+      console.error('Speech synthesis error:', event);
+      speakWithOnlineTTS(word);
+    };
+    
+    utterance.onend = () => {
+      console.log('Speech synthesis completed');
+    };
+    
+    setTimeout(() => {
+      window.speechSynthesis.resume();
+      window.speechSynthesis.speak(utterance);
+      console.log('Utterance queued, speaking:', window.speechSynthesis.speaking);
+    }, 100);
+  } else {
+    console.log('No English voice found, using online TTS');
+    speakWithOnlineTTS(word);
+  }
+};
+
+const speakWithOnlineTTS = (word: string) => {
+  try {
+    const audio = new Audio(`https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word)}&type=2`);
+    audio.onerror = () => {
+      console.log('Youdao TTS failed, trying Google Translate TTS');
+      const googleAudio = new Audio(`https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(word)}&tl=en&client=tw-ob`);
+      googleAudio.onerror = () => {
+        console.error('All TTS methods failed');
+        alert('语音播放失败，请检查网络连接');
+      };
+      googleAudio.play();
+    };
+    audio.play();
+    console.log('Playing using online TTS:', word);
+  } catch (error) {
+    console.error('Online TTS error:', error);
+    alert('语音播放失败，请检查网络连接');
   }
 };
 
@@ -156,7 +236,7 @@ export const HomePage = () => {
   const handleMarkMastered = async () => {
     if (currentWord) {
       await markWord(currentWord.id, 'mastered');
-      fetchLearningRecords();
+      await fetchLearningRecords();
       if (currentWordIndex >= sessionWords.length - 1) {
         setSessionWords([]);
       } else {
@@ -168,7 +248,7 @@ export const HomePage = () => {
   const handleMarkLearning = async () => {
     if (currentWord) {
       await markWord(currentWord.id, 'learning');
-      fetchLearningRecords();
+      await fetchLearningRecords();
       if (currentWordIndex >= sessionWords.length - 1) {
         setSessionWords([]);
       } else {

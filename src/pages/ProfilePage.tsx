@@ -66,29 +66,15 @@ export const ProfilePage = () => {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        const response = await fetch('http://localhost:5000/api/change-password', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ oldPassword, newPassword })
-        });
-        const data = await response.json();
-        if (response.ok) {
-          setPasswordSuccess('密码修改成功');
-          setOldPassword('');
-          setNewPassword('');
-          setConfirmPassword('');
-          setTimeout(() => setShowChangePassword(false), 2000);
-        } else {
-          setPasswordError(data.error || '修改失败');
-        }
-      }
-    } catch {
-      setPasswordError('网络错误');
+      await api.changePassword(oldPassword, newPassword);
+      setPasswordSuccess('密码修改成功');
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setShowChangePassword(false), 2000);
+    } catch (error) {
+      const err = error as { response?: { data?: { error?: string } } };
+      setPasswordError(err.response?.data?.error || '修改失败');
     }
   };
 
@@ -105,30 +91,17 @@ export const ProfilePage = () => {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        const response = await fetch('http://localhost:5000/api/clear-data', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        if (response.ok) {
-          useWordStore.getState().clearLearningData();
-          setAchievements({
-            streak: 0,
-            totalMastered: 0,
-            totalReviews: 0,
-            learningDays: 0,
-            achievements: []
-          });
-        } else {
-          alert('清除失败');
-        }
-      }
+      await api.clearData();
+      useWordStore.getState().clearLearningData();
+      setAchievements({
+        streak: 0,
+        totalMastered: 0,
+        totalReviews: 0,
+        learningDays: 0,
+        achievements: []
+      });
     } catch {
-      alert('网络错误');
+      alert('清除失败');
     }
   };
 

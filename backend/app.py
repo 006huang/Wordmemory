@@ -37,10 +37,34 @@ supabase: Client = None
 if SUPABASE_URL and SUPABASE_KEY:
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wordmemory.db')
+DB_PATH = os.getenv('DB_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wordmemory.db'))
+
+_sqlite_conn = None
+
+def get_sqlite_conn():
+    global _sqlite_conn
+    if _sqlite_conn is None:
+        _sqlite_conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
+        _sqlite_conn.row_factory = sqlite3.Row
+    return _sqlite_conn
+
+def close_sqlite_conn(conn):
+    pass
+
+def snake_to_camel(data):
+    if isinstance(data, dict):
+        return {
+            ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(key.split('_'))):
+            snake_to_camel(value)
+            for key, value in data.items()
+        }
+    elif isinstance(data, list):
+        return [snake_to_camel(item) for item in data]
+    else:
+        return data
 
 def init_sqlite():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_sqlite_conn()
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
@@ -134,6 +158,12 @@ def init_sqlite():
         )
     ''')
     
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_learning_records_user ON learning_records(user_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_learning_records_next_review ON learning_records(next_review_at)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_daily_stats_user_date ON daily_stats(user_id, date)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_weekly_stats_user_date ON weekly_stats(user_id, date)')
+    
     cursor.execute('SELECT COUNT(*) FROM words')
     if cursor.fetchone()[0] == 0:
         import json
@@ -148,15 +178,11 @@ def init_sqlite():
                   word['example'], word['category'], word['difficulty'], "2024-01-01T00:00:00Z"))
     
     conn.commit()
-    conn.close()
 
 init_sqlite()
 
 def use_supabase():
     return supabase is not None
-
-def get_sqlite_conn():
-    return sqlite3.connect(DB_PATH)
 
 @app.route('/api/words', methods=['GET'])
 def get_words():
@@ -168,11 +194,9 @@ def get_words():
             return jsonify({"error": str(e)}), 500
     
     conn = get_sqlite_conn()
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM words')
     words = [dict(row) for row in cursor.fetchall()]
-    conn.close()
     return jsonify(words), 200
 
 @app.route('/api/words/<word_id>', methods=['GET'])
@@ -185,11 +209,9 @@ def get_word(word_id):
             return jsonify({"error": str(e)}), 404
     
     conn = get_sqlite_conn()
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM words WHERE id = ?', (word_id,))
     word = cursor.fetchone()
-    conn.close()
     if word:
         return jsonify(dict(word)), 200
     return jsonify({"error": "Word not found"}), 404
@@ -219,7 +241,6 @@ def create_word():
           new_word.get('example', ''), new_word.get('category', 'CET-4'), new_word.get('difficulty', 'medium'), 
           new_word['created_at']))
     conn.commit()
-    conn.close()
     return jsonify(new_word), 201
 
 @app.route('/api/words/<word_id>', methods=['PUT'])
@@ -246,7 +267,6 @@ def update_word(word_id):
     update_values.append(word_id)
     
     if not update_fields:
-        conn.close()
         return jsonify({"error": "No valid fields to update"}), 400
     
     cursor.execute(f'UPDATE words SET {", ".join(update_fields)} WHERE id = ?', update_values)
@@ -254,7 +274,6 @@ def update_word(word_id):
     
     cursor.execute('SELECT * FROM words WHERE id = ?', (word_id,))
     updated_word = cursor.fetchone()
-    conn.close()
     
     if updated_word:
         return jsonify(dict(updated_word)), 200
@@ -273,7 +292,6 @@ def delete_word(word_id):
     cursor = conn.cursor()
     cursor.execute('DELETE FROM words WHERE id = ?', (word_id,))
     conn.commit()
-    conn.close()
     return jsonify({"message": "Word deleted successfully"}), 200
 
 @app.route('/api/learning-records', methods=['GET'])
@@ -316,7 +334,6 @@ def get_learning_records():
             'nextReviewAt': r['next_review_at'],
             'createdAt': r['created_at']
         })
-    conn.close()
     return jsonify(records), 200
 
 @app.route('/api/review-words', methods=['GET'])
@@ -342,13 +359,11 @@ def get_review_words():
     word_ids = [row['word_id'] for row in cursor.fetchall()]
     
     if not word_ids:
-        conn.close()
         return jsonify([]), 200
     
     placeholders = ','.join('?' * len(word_ids))
     cursor.execute(f'SELECT * FROM words WHERE id IN ({placeholders})', word_ids)
     words = [dict(row) for row in cursor.fetchall()]
-    conn.close()
     return jsonify(words), 200
 
 def get_next_review_interval(status: str, review_count: int) -> timedelta:
@@ -364,6 +379,8 @@ def get_next_review_interval(status: str, review_count: int) -> timedelta:
 def create_learning_record():
     data = request.get_json()
     user_id = get_current_user_id()
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    week_num = datetime.utcnow().strftime('%Y-W%W')
     
     if use_supabase():
         try:
@@ -383,6 +400,25 @@ def create_learning_record():
                     "next_review_at": (datetime.utcnow() + next_review).isoformat() + "Z"
                 }
                 response = supabase.table('learning_records').update(record).eq('user_id', user_id).eq('word_id', data['wordId']).execute()
+                
+                supabase.table('daily_stats').upsert({
+                    "user_id": user_id,
+                    "date": today,
+                    "words_learned": 0,
+                    "words_reviewed": 1
+                }, on_conflict=['user_id', 'date'], ignore_duplicates=False).execute()
+                
+                supabase.table('daily_stats').update({
+                    "words_reviewed": supabase.table('daily_stats').select('words_reviewed').eq('user_id', user_id).eq('date', today).single().execute().data.get('words_reviewed', 0) + 1
+                }).eq('user_id', user_id).eq('date', today).execute()
+                
+                supabase.table('weekly_stats').upsert({
+                    "user_id": user_id,
+                    "date": week_num,
+                    "words_learned": 0,
+                    "words_reviewed": 1
+                }, on_conflict=['user_id', 'date'], ignore_duplicates=False).execute()
+                
                 r = response.data[0]
                 return jsonify({
                     'id': r['id'],
@@ -408,6 +444,21 @@ def create_learning_record():
                     "created_at": datetime.utcnow().isoformat() + "Z"
                 }
                 response = supabase.table('learning_records').insert(record).execute()
+                
+                supabase.table('daily_stats').upsert({
+                    "user_id": user_id,
+                    "date": today,
+                    "words_learned": 1,
+                    "words_reviewed": 0
+                }, on_conflict=['user_id', 'date'], ignore_duplicates=False).execute()
+                
+                supabase.table('weekly_stats').upsert({
+                    "user_id": user_id,
+                    "date": week_num,
+                    "words_learned": 1,
+                    "words_reviewed": 0
+                }, on_conflict=['user_id', 'date'], ignore_duplicates=False).execute()
+                
                 r = response.data[0]
                 return jsonify({
                     'id': r['id'],
@@ -423,17 +474,17 @@ def create_learning_record():
             return jsonify({"error": str(e)}), 500
     
     conn = get_sqlite_conn()
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute('SELECT word FROM words WHERE id = ?', (data.get('wordId'),))
     word = cursor.fetchone()
     
     if not word:
-        conn.close()
         return jsonify({"error": "Word not found"}), 404
     
     cursor.execute('SELECT * FROM learning_records WHERE user_id = ? AND word_id = ?', (user_id, data['wordId']))
     existing_record = cursor.fetchone()
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    week_num = datetime.utcnow().strftime('%Y-W%W')
     
     if existing_record:
         review_count = existing_record['review_count'] + 1
@@ -444,11 +495,27 @@ def create_learning_record():
             WHERE user_id = ? AND word_id = ?
         ''', (data['status'], review_count, datetime.utcnow().isoformat() + "Z", 
               (datetime.utcnow() + next_review).isoformat() + "Z", user_id, data['wordId']))
+        
+        cursor.execute('''
+            INSERT OR IGNORE INTO daily_stats (id, user_id, date, words_learned, words_reviewed)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (str(uuid.uuid4()), user_id, today, 0, 0))
+        cursor.execute('''
+            UPDATE daily_stats SET words_reviewed = words_reviewed + 1 WHERE user_id = ? AND date = ?
+        ''', (user_id, today))
+        
+        cursor.execute('''
+            INSERT OR IGNORE INTO weekly_stats (id, user_id, date, words_learned, words_reviewed)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (str(uuid.uuid4()), user_id, week_num, 0, 0))
+        cursor.execute('''
+            UPDATE weekly_stats SET words_reviewed = words_reviewed + 1 WHERE user_id = ? AND date = ?
+        ''', (user_id, week_num))
+        
         conn.commit()
         
         cursor.execute('SELECT * FROM learning_records WHERE user_id = ? AND word_id = ?', (user_id, data['wordId']))
         updated_record = cursor.fetchone()
-        conn.close()
         r = dict(updated_record)
         return jsonify({
             'id': r['id'],
@@ -478,8 +545,24 @@ def create_learning_record():
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (record['id'], user_id, record['word_id'], record['word'], record['status'], record['review_count'], 
               record['last_review_at'], record['next_review_at'], record['created_at']))
+        
+        cursor.execute('''
+            INSERT OR IGNORE INTO daily_stats (id, user_id, date, words_learned, words_reviewed)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (str(uuid.uuid4()), user_id, today, 0, 0))
+        cursor.execute('''
+            UPDATE daily_stats SET words_learned = words_learned + 1 WHERE user_id = ? AND date = ?
+        ''', (user_id, today))
+        
+        cursor.execute('''
+            INSERT OR IGNORE INTO weekly_stats (id, user_id, date, words_learned, words_reviewed)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (str(uuid.uuid4()), user_id, week_num, 0, 0))
+        cursor.execute('''
+            UPDATE weekly_stats SET words_learned = words_learned + 1 WHERE user_id = ? AND date = ?
+        ''', (user_id, week_num))
+        
         conn.commit()
-        conn.close()
         return jsonify({
             'id': record['id'],
             'wordId': record['word_id'],
@@ -498,18 +581,16 @@ def get_daily_stats():
     if use_supabase():
         try:
             response = supabase.table('daily_stats').select('*').eq('user_id', user_id).execute()
-            return jsonify(response.data), 200
+            return jsonify(snake_to_camel(response.data)), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 500
     
     conn = get_sqlite_conn()
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM daily_stats WHERE user_id = ?', (user_id,))
     stats = [dict(row) for row in cursor.fetchall()]
-    conn.close()
     
-    return jsonify(stats), 200
+    return jsonify(snake_to_camel(stats)), 200
 
 @app.route('/api/stats/weekly', methods=['GET'])
 def get_weekly_stats():
@@ -518,18 +599,16 @@ def get_weekly_stats():
     if use_supabase():
         try:
             response = supabase.table('weekly_stats').select('*').eq('user_id', user_id).execute()
-            return jsonify(response.data), 200
+            return jsonify(snake_to_camel(response.data)), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 500
     
     conn = get_sqlite_conn()
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM weekly_stats WHERE user_id = ?', (user_id,))
     stats = [dict(row) for row in cursor.fetchall()]
-    conn.close()
     
-    return jsonify(stats), 200
+    return jsonify(snake_to_camel(stats)), 200
 
 @app.route('/api/register', methods=['POST'])
 def register():
@@ -570,7 +649,6 @@ def register():
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
     if cursor.fetchone():
-        conn.close()
         return jsonify({"error": "用户名已存在"}), 400
     
     user_id = str(uuid.uuid4())
@@ -579,7 +657,6 @@ def register():
         VALUES (?, ?, ?, ?)
     ''', (user_id, username, hashed_password, datetime.utcnow().isoformat()))
     conn.commit()
-    conn.close()
     
     token = generate_token(user_id)
     return jsonify({
@@ -625,7 +702,6 @@ def login():
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
     user = cursor.fetchone()
-    conn.close()
     
     if not user or not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
         return jsonify({"error": "用户名或密码错误"}), 401
@@ -682,13 +758,11 @@ def change_password():
     user = cursor.fetchone()
     
     if not user or not bcrypt.checkpw(old_password.encode('utf-8'), user['password'].encode('utf-8')):
-        conn.close()
         return jsonify({"error": "当前密码错误"}), 400
     
     hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     cursor.execute('UPDATE users SET password = ? WHERE id = ?', (hashed_password, user_id))
     conn.commit()
-    conn.close()
     
     return jsonify({"message": "密码修改成功"}), 200
 
@@ -719,7 +793,6 @@ def clear_data():
     cursor.execute('DELETE FROM weekly_stats WHERE user_id = ?', (user_id,))
     
     conn.commit()
-    conn.close()
     
     return jsonify({"message": "数据清除成功"}), 200
 
@@ -746,14 +819,11 @@ def get_favorites():
     favorite_ids = [row['word_id'] for row in cursor.fetchall()]
     
     if not favorite_ids:
-        conn.close()
         return jsonify([]), 200
     
     placeholders = ','.join('?' * len(favorite_ids))
     cursor.execute(f'SELECT * FROM words WHERE id IN ({placeholders})', favorite_ids)
     words = [dict(row) for row in cursor.fetchall()]
-    
-    conn.close()
     return jsonify(words), 200
 
 @app.route('/api/favorites', methods=['POST'])
@@ -793,7 +863,6 @@ def add_favorite():
     word = cursor.fetchone()
     
     if not word:
-        conn.close()
         return jsonify({"error": "单词不存在"}), 404
     
     try:
@@ -803,10 +872,7 @@ def add_favorite():
         ''', (str(uuid.uuid4()), user_id, word_id, datetime.utcnow().isoformat()))
         conn.commit()
     except sqlite3.IntegrityError:
-        conn.close()
         return jsonify({"error": "已收藏"}), 400
-    
-    conn.close()
     return jsonify(dict(word)), 201
 
 @app.route('/api/favorites/<word_id>', methods=['DELETE'])
@@ -827,7 +893,6 @@ def delete_favorite(word_id):
     
     cursor.execute('DELETE FROM favorites WHERE user_id = ? AND word_id = ?', (user_id, word_id))
     conn.commit()
-    conn.close()
     
     return jsonify({"message": "取消收藏成功"}), 200
 
@@ -870,7 +935,6 @@ def get_wordbooks():
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM wordbooks WHERE user_id = ?', (user_id,))
     wordbooks = [dict(row) for row in cursor.fetchall()]
-    conn.close()
     return jsonify(wordbooks), 200
 
 @app.route('/api/wordbooks', methods=['POST'])
@@ -899,7 +963,6 @@ def create_wordbook():
         VALUES (?, ?, ?, ?, ?)
     ''', (wordbook['id'], wordbook['user_id'], wordbook['name'], wordbook['description'], wordbook['created_at']))
     conn.commit()
-    conn.close()
     return jsonify(wordbook), 201
 
 @app.route('/api/wordbooks/<id>/words', methods=['GET'])
@@ -922,13 +985,11 @@ def get_wordbook_words(id):
     word_ids = [row['word_id'] for row in cursor.fetchall()]
     
     if not word_ids:
-        conn.close()
         return jsonify([]), 200
     
     placeholders = ','.join('?' * len(word_ids))
     cursor.execute(f'SELECT * FROM words WHERE id IN ({placeholders})', word_ids)
     words = [dict(row) for row in cursor.fetchall()]
-    conn.close()
     return jsonify(words), 200
 
 @app.route('/api/wordbooks/<id>/words', methods=['POST'])
@@ -954,7 +1015,6 @@ def add_word_to_wordbook(id):
     if not cursor.fetchone():
         cursor.execute('INSERT INTO wordbook_words (wordbook_id, word_id) VALUES (?, ?)', (id, word_id))
         conn.commit()
-    conn.close()
     return jsonify({"message": "Word added"}), 200
 
 @app.route('/api/wordbooks/<id>/words/<word_id>', methods=['DELETE'])
@@ -970,7 +1030,6 @@ def remove_word_from_wordbook(id, word_id):
     cursor = conn.cursor()
     cursor.execute('DELETE FROM wordbook_words WHERE wordbook_id = ? AND word_id = ?', (id, word_id))
     conn.commit()
-    conn.close()
     return jsonify({"message": "Word removed"}), 200
 
 @app.route('/api/wordbooks/<id>', methods=['DELETE'])
@@ -990,7 +1049,6 @@ def delete_wordbook(id):
     cursor.execute('DELETE FROM wordbook_words WHERE wordbook_id = ?', (id,))
     cursor.execute('DELETE FROM wordbooks WHERE id = ? AND user_id = ?', (id, user_id))
     conn.commit()
-    conn.close()
     return jsonify({"message": "Wordbook deleted"}), 200
 
 @app.route('/api/achievements', methods=['GET'])
@@ -1009,7 +1067,6 @@ def get_achievements():
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM learning_records WHERE user_id = ?', (user_id,))
         records = [dict(row) for row in cursor.fetchall()]
-        conn.close()
     
     mastered_count = len([r for r in records if r.get('status') == 'mastered'])
     total_reviews = sum(r.get('review_count', 0) for r in records)

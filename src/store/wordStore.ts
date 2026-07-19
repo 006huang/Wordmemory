@@ -54,6 +54,7 @@ export const useWordStore = create<WordStore>((set, get) => ({
   fetchLearningRecords: async () => {
     set({ loading: true });
     try {
+      api.clearCache();
       const data = await api.getLearningRecords();
       set({ learningRecords: data || [] });
     } catch {

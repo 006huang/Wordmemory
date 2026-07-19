@@ -191,23 +191,42 @@ python app.py
 
 ## 部署
 
-### 前端部署到 Netlify
+### 前端部署到 Vercel/Netlify
 
 1. 在项目根目录执行 `npm run build`，生成 `dist` 文件夹
-2. 登录 Netlify 官网（app.netlify.com）
-3. 将 `dist` 文件夹拖拽到 Netlify Drop 区域
-4. 部署完成后，Netlify 会生成一个 `项目名.netlify.app` 的访问链接
-5. 注册 Netlify 账号后，该链接永久有效
+2. 登录 Vercel（vercel.com）或 Netlify（app.netlify.com）官网
+3. 将 `dist` 文件夹拖拽到部署区域，或连接 GitHub 仓库自动部署
+4. 部署完成后，平台会生成一个访问链接
 
 **前端线上地址**：`https://tubular-cucurucho-072871.netlify.app`
 
-### 后端部署（本地运行）
+### 后端部署
 
-后端服务基于 Python Flask，如需本地运行：
+#### 方式一：本地运行（开发环境）
+
 ```bash
 cd backend
 pip install -r requirements.txt
-python app.py ```
+python app.py
+```
+
+#### 方式二：部署到 Render（生产环境）
+
+1. 登录 Render 官网（render.com）
+2. 点击 "New" -> "Web Service"
+3. 选择 GitHub 仓库，自动导入配置（render.yaml）
+4. 配置环境变量：
+   - `SECRET_KEY`：自动生成或手动设置
+   - `JWT_EXPIRY_HOURS`：24
+   - `DEBUG`：false
+5. 部署完成后，Render 会提供一个 `项目名.onrender.com` 的访问链接
+
+#### 方式三：使用 Docker（可选）
+
+```bash
+docker build -t wordmemory-backend .
+docker run -p 5174:5174 wordmemory-backend
+```
 
 ## 学习模式说明
 
@@ -231,4 +250,5 @@ MIT License
 
 - GitHub: https://github.com/006huang/Wordmemory
 - 前端部署: https://tubular-cucurucho-072871.netlify.app
-- 后端部署: 本地运行（`cd backend && python app.py`）
+- 后端部署: 需部署到 Render（配置文件已准备好）
+- API文档: docs/API_DOC.md

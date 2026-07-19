@@ -16,9 +16,13 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
   const resetStore = useWordStore((state) => state.resetStore);
 
   useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      setUser(JSON.parse(userData));
+    try {
+      const userData = localStorage.getItem('user');
+      if (userData && userData !== 'undefined') {
+        setUser(JSON.parse(userData));
+      }
+    } catch {
+      setUser(null);
     }
   }, []);
 

@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { Word, LearningRecord, DailyStats } from '../types';
 
-const BASE_URL = 'http://127.0.0.1:5174/api';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5174/api';
 
 const client = axios.create({
   baseURL: BASE_URL,
@@ -33,7 +33,12 @@ const setCached = (key: string, data: any) => {
   cache.set(key, { data, timestamp: Date.now() });
 };
 
+const clearCache = () => {
+  cache.clear();
+};
+
 export const api = {
+  clearCache,
   getWords: async (): Promise<Word[]> => {
     const cached = getCached<Word[]>('words');
     if (cached) return cached;
@@ -249,5 +254,15 @@ export const api = {
     } catch {
       throw new Error('Failed to remove favorite');
     }
+  },
+
+  changePassword: async (oldPassword: string, newPassword: string): Promise<{ message: string }> => {
+    const response = await client.post('/change-password', { oldPassword, newPassword });
+    return response.data;
+  },
+
+  clearData: async (): Promise<{ message: string }> => {
+    const response = await client.post('/clear-data');
+    return response.data;
   },
 };
